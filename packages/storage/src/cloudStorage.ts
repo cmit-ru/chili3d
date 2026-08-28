@@ -24,7 +24,14 @@ type StateListener = (state: SaveState, info?: ConflictInfo) => void;
 const BUFFER_DB = "maketka-buffer";
 const BUFFER_STORE = "edits";
 
+/**
+ * Адрес работы приходит от оболочки: она проверяет доступ на сервере ДО того,
+ * как ребёнок начнёт качать десять мегабайт ядра, и открывает редактор рамкой
+ * (iframe — отдельный документ, закрытого кода на этой странице нет, ADR 1300).
+ */
 function projectIdFromLocation(): string | null {
+    const fromQuery = new URLSearchParams(window.location.search).get("project");
+    if (fromQuery && /^\d+$/.test(fromQuery)) return fromQuery;
     const match = /\/3d\/(\d+)/.exec(window.location.pathname);
     return match ? match[1] : null;
 }
