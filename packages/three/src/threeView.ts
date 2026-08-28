@@ -242,9 +242,25 @@ export class ThreeView extends Observable implements IView {
         );
     }
 
-    toImage(): string {
+    toImage(maxSize?: number): string {
+        // Пиксели холста валидны только сразу после render в том же кадре
+        // (preserveDrawingBuffer выключен), поэтому снимок делаем здесь же.
         this._renderer.render(this._scene, this.camera);
-        return this.renderer.domElement.toDataURL();
+        const source = this.renderer.domElement;
+        if (!maxSize || Math.max(source.width, source.height) <= maxSize) {
+            return source.toDataURL();
+        }
+
+        // Форк «Макетки»: превью для ленты работ — 320 px JPEG (~20 КБ) вместо
+        // полноразмерного PNG, который при автосохранении заливал бы канал класса.
+        const scale = maxSize / Math.max(source.width, source.height);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(source.width * scale);
+        canvas.height = Math.round(source.height * scale);
+        const context = canvas.getContext("2d");
+        if (!context) return source.toDataURL();
+        context.drawImage(source, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL("image/jpeg", 0.7);
     }
 
     get workplane(): Plane {

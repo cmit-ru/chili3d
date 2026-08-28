@@ -17,6 +17,21 @@ export class History implements IDisposable {
     disabled = false;
     undoLimits = 50;
 
+    /**
+     * Форк «Макетки»: точка, по которой оболочка узнаёт, что работа изменилась.
+     * В upstream события «документ изменён» нет вовсе, а без него автосохранение
+     * пришлось бы делать по таймеру вслепую — и терять правки между тактами.
+     */
+    onChanged?: () => void;
+
+    private notifyChanged() {
+        try {
+            this.onChanged?.();
+        } catch {
+            // Автосохранение никогда не должно ломать саму правку.
+        }
+    }
+
     #isUndoing = false;
     get isUndoing() {
         return this.#isUndoing;
@@ -47,6 +62,8 @@ export class History implements IDisposable {
             const removed = this._undos.shift();
             removed?.dispose();
         }
+
+        this.notifyChanged();
     }
 
     undoCount() {
@@ -69,6 +86,7 @@ export class History implements IDisposable {
             },
             () => {
                 this.#isUndoing = false;
+                this.notifyChanged();
             },
         );
     }
@@ -85,6 +103,7 @@ export class History implements IDisposable {
             },
             () => {
                 this.#isRedoing = false;
+                this.notifyChanged();
             },
         );
     }

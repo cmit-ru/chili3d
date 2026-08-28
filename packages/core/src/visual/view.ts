@@ -44,7 +44,8 @@ export interface IView extends IPropertyChanged, IDisposable {
     workplane: Plane;
     update(): void;
     up(): XYZ;
-    toImage(): string;
+    /** maxSize — сторона превью в пикселях; без него отдаётся полный холст. */
+    toImage(maxSize?: number): string;
     direction(): XYZ;
     rayAt(mx: number, my: number): Ray;
     screenToWorld(mx: number, my: number): XYZ;

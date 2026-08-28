@@ -144,8 +144,12 @@ export class CloudStorage implements IStorage {
     }
 
     async put(_database: string, table: string, id: string, value: any): Promise<boolean> {
-        // Список недавних документов — забота оболочки, в облако его не пишем.
-        if (table !== "documents") return true;
+        // Список недавних документов не храним — лента работ живёт в кабинете.
+        // Но именно с ним ядро отдаёт свежий снимок сцены: забираем его на превью.
+        if (table !== "documents") {
+            if (typeof value?.image === "string") void this.maybeSaveThumbnail(value.image);
+            return true;
+        }
 
         const projectId = id || projectIdFromLocation();
         if (!projectId) return false;
@@ -216,7 +220,19 @@ export class CloudStorage implements IStorage {
         return response.json();
     }
 
-    /** Превью снимается тем же рендерером в кадре — см. saveThumbnail в UI. */
+    /**
+     * Превью отправляем не чаще раза в минуту: снимок делается на каждом
+     * сохранении, а канал класса делится на тридцать человек.
+     */
+    private lastThumbAt = 0;
+    private async maybeSaveThumbnail(dataUrl: string): Promise<void> {
+        const now = Date.now();
+        if (now - this.lastThumbAt < 60_000) return;
+        this.lastThumbAt = now;
+        await this.saveThumbnail(dataUrl);
+    }
+
+    /** Превью снимается тем же рендерером в кадре — см. toImage(320). */
     async saveThumbnail(dataUrl: string): Promise<void> {
         const projectId = projectIdFromLocation();
         if (!projectId) return;
