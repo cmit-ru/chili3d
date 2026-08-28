@@ -74,6 +74,16 @@ export class AutoSave {
         }
     }
 
+    /** Есть ли правки, о которых сервер ещё не знает (нужно замку и индикатору). */
+    hasPending(): boolean {
+        return this.idleTimer !== undefined || this.maxTimer !== undefined || this.saving;
+    }
+
+    /** Немедленное сохранение: перед блокировкой экрана и уходом со страницы. */
+    async saveNow(document: IDocument): Promise<void> {
+        await this.flush(document);
+    }
+
     /** Последняя попытка при уходе: вкладку закрывают, не дожидаясь таймера. */
     attachUnloadGuard(document: IDocument) {
         window.addEventListener("pagehide", () => {

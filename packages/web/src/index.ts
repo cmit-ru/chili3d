@@ -17,7 +17,9 @@ import { type IApplication, PubSub } from "@chili3d/core";
 import type { CloudStorage } from "@chili3d/storage";
 import { SaveIndicator } from "@chili3d/ui";
 import { AutoSave } from "./autoSave";
+import { type LessonCard, LessonPanel } from "./lessonPanel";
 import { Loading } from "./loading";
+import { ScreenLock } from "./screenLock";
 
 const loading = new Loading();
 document.body.appendChild(loading);
@@ -54,18 +56,48 @@ function attachSaveIndicator(app: IApplication, autoSave: AutoSave) {
     };
 }
 
+interface ProjectMeta {
+    card: LessonCard | null;
+    user: { name: string; avatar: string; role: string };
+    lockMinutes: number;
+}
+
+async function fetchMeta(id: string): Promise<ProjectMeta | null> {
+    try {
+        const response = await fetch(`/api/projects/${id}`, { credentials: "same-origin" });
+        if (!response.ok) return null;
+        return (await response.json()) as ProjectMeta;
+    } catch {
+        return null;
+    }
+}
+
 async function openProject(app: IApplication, autoSave: AutoSave) {
     const id = projectId();
     if (!id) return;
 
-    const document = await Document.open(app, id);
-    if (!document) return;
+    const doc = await Document.open(app, id);
+    if (!doc) return;
 
-    autoSave.watch(document);
-    autoSave.attachUnloadGuard(document);
+    autoSave.watch(doc);
+    autoSave.attachUnloadGuard(doc);
 
     // Домашний экран редактора скрываем: список работ живёт в кабинете оболочки.
     PubSub.default.pub("displayHome", false);
+
+    const meta = await fetchMeta(id);
+    if (meta?.card?.steps?.length) {
+        new LessonPanel(meta.card, id);
+    }
+    if (meta?.user && meta.user.role === "student") {
+        new ScreenLock({
+            minutes: meta.lockMinutes ?? 10,
+            userName: meta.user.name,
+            userAvatar: meta.user.avatar,
+            hasUnsaved: () => autoSave.hasPending(),
+            flush: () => autoSave.saveNow(doc),
+        });
+    }
 }
 
 async function handleApplicaionBuilt(app: IApplication) {
