@@ -57,6 +57,7 @@ function attachSaveIndicator(app: IApplication, autoSave: AutoSave) {
 }
 
 interface ProjectMeta {
+    title?: string;
     card: LessonCard | null;
     user: { name: string; avatar: string; role: string };
     lockMinutes: number;
@@ -76,8 +77,16 @@ async function openProject(app: IApplication, autoSave: AutoSave) {
     const id = projectId();
     if (!id) return;
 
-    const doc = await Document.open(app, id);
-    if (!doc) return;
+    const meta = await fetchMeta(id);
+
+    // Работа могла быть ещё не начата (в облаке пусто) или сохранена другой
+    // версией формата — тогда открывать нечего, начинаем с чистой сцены.
+    // Без этого ребёнок попадал на домашний экран Chili3D вместо своей работы.
+    let doc = await Document.open(app, id).catch(() => undefined);
+    if (!doc) {
+        doc = await app.newDocument(meta?.title ?? "Моя работа");
+        await doc.save();
+    }
 
     autoSave.watch(doc);
     autoSave.attachUnloadGuard(doc);
@@ -85,7 +94,6 @@ async function openProject(app: IApplication, autoSave: AutoSave) {
     // Домашний экран редактора скрываем: список работ живёт в кабинете оболочки.
     PubSub.default.pub("displayHome", false);
 
-    const meta = await fetchMeta(id);
     if (meta?.card?.steps?.length) {
         new LessonPanel(meta.card, id);
     }

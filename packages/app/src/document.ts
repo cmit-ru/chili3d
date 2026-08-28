@@ -131,8 +131,10 @@ export class Document extends Observable implements IDocument {
 
     static async load(app: IApplication, data: Serialized): Promise<IDocument | undefined> {
         if ((data as any).version !== __DOCUMENT_VERSION__) {
-            alert(
-                "The file version has been upgraded, no compatibility treatment was done in the development phase",
+            // Форк «Макетки»: молча отдаём undefined вместо системного alert —
+            // решение, что показать ребёнку, принимает вызывающий код.
+            Logger.warn(
+                `document: несовместимая версия формата (${(data as any).version} вместо ${__DOCUMENT_VERSION__})`,
             );
             return undefined;
         }
