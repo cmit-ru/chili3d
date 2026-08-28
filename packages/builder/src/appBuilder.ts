@@ -70,6 +70,24 @@ export class AppBuilder {
         return this;
     }
 
+    /**
+     * Форк «Макетки»: работы хранятся в облаке школы, а не в браузере ребёнка.
+     * IndexedDB остаётся буфером несохранённых правок (ТЗ §5).
+     */
+    useCloudStorage() {
+        this._inits.push(async () => {
+            Logger.info("initializing CloudStorage");
+
+            const db = await import("@chili3d/storage");
+            this._storage = new db.CloudStorage();
+            await this._storage.createDBIfNeeded(Constants.DBName, [
+                Constants.DocumentTable,
+                Constants.RecentTable,
+            ]);
+        });
+        return this;
+    }
+
     useWasmOcc() {
         this._inits.push(async () => {
             Logger.info("initializing wasm occ");
@@ -115,35 +133,10 @@ export class AppBuilder {
 
         const app = this.createApp();
         await this._window?.init(app);
-        await this.loadDefaultPlugins(app);
 
         Logger.info("Application build completed");
 
         return app;
-    }
-
-    protected async loadDefaultPlugins(app: IApplication) {
-        const urlObj = new URL(window.location.href);
-        const pathParts = urlObj.pathname
-            .split("/")
-            .map((x) => x.trim())
-            .filter((x) => x.length > 0);
-        if (pathParts.at(-1)?.endsWith(".html")) pathParts.pop();
-        urlObj.pathname = `${pathParts.join("/")}/`;
-        const folderUrl = `${urlObj.href}plugins/`;
-        try {
-            const response = await fetch(`${folderUrl}plugins.json`);
-            if (!response.ok) {
-                return;
-            }
-            const config = await response.json();
-            const plugins = config.plugins as string[];
-            for (const plugin of plugins ?? []) {
-                await app.pluginManager.loadFromUrl(folderUrl + plugin);
-            }
-        } catch {
-            Logger.warn(`Failed to load plugins from folder: ${folderUrl}`);
-        }
     }
 
     createApp() {

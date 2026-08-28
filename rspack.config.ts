@@ -100,5 +100,12 @@ export default defineConfig({
     },
     output: {
         clean: true,
+        // Редактор живёт на /3d/ — оболочка занимает корень домена.
+        publicPath: "/3d/",
+        // Хэш в имени: без него immutable-кэш отдавал бы детям устаревший
+        // редактор после деплоя (ТЗ §9).
+        filename: "[name].[contenthash].js",
+        chunkFilename: "[name].[contenthash].js",
+        assetModuleFilename: "assets/[name].[contenthash][ext]",
     },
 });

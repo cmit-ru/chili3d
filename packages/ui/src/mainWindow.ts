@@ -13,6 +13,10 @@ import {
     RibbonTab,
     type RibbonTabProfile,
 } from "@chili3d/core";
+// Иконки подключаются статическим импортом. В upstream они грузились через
+// fetch + new Function — это исполнение кода по сети на origin с сессионной
+// кукой ребёнка; запрещено INV-006 и строгой CSP.
+import "./iconfont.js";
 import { showDialog } from "./dialog";
 import { Editor } from "./editor";
 import { showFloatPanel } from "./floatPanel";
@@ -64,8 +68,6 @@ export class MainWindow extends HTMLElement implements IWindow {
         I18n.changeLanguage(Config.instance.language);
 
         await this.loadCss();
-        await this.fetchIconFont();
-
         this.applyTheme();
         await this._initHome(app);
         this._initEditor(app);
@@ -74,13 +76,6 @@ export class MainWindow extends HTMLElement implements IWindow {
 
     protected async loadCss() {
         await import("./mainWindow.module.css");
-    }
-
-    protected async fetchIconFont() {
-        const response = await fetch(this.iconFont);
-        const text = await response.text();
-
-        new Function(text)();
     }
 
     private _initEventHandlers(app: IApplication) {

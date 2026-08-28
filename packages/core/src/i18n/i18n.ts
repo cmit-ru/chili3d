@@ -39,13 +39,20 @@ export class I18n {
     }
 
     static defaultLanguage(): string {
-        const defaultLanguage = navigator.language.toLowerCase();
-        const language = languages.keys().find((key) => key.toLowerCase() === defaultLanguage);
-        if (language) {
-            return language;
+        const preferred = navigator.language.toLowerCase();
+        const exact = languages.keys().find((key) => key.toLowerCase() === preferred);
+        if (exact) {
+            return exact;
         }
-
-        return "en";
+        // navigator.language отдаёт «ru-RU», а ключ словаря — «ru»: без сравнения
+        // по префиксу ребёнок с русской системой получал английский интерфейс.
+        const base = preferred.split("-")[0];
+        const byBase = languages.keys().find((key) => key.toLowerCase().split("-")[0] === base);
+        if (byBase) {
+            return byBase;
+        }
+        // Аудитория форка — российские школы, поэтому запасной язык русский.
+        return languages.has("ru") ? "ru" : "en";
     }
 
     static getLanguages(): Locale[] {

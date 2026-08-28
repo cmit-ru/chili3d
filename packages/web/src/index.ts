@@ -1,36 +1,30 @@
 // Part of the Chili3d Project, under the AGPL-3.0 License.
 // See LICENSE file in the project root for full license information.
+//
+// Форк «Макетки»: загрузка плагинов и файлов по параметрам URL удалена целиком
+// (INV-006). В upstream `?plugin=`, `?url=` и `?model=` исполняли и открывали
+// произвольный код и файлы на том же origin, где живёт сессия ребёнка.
 
 import { AppBuilder } from "@chili3d/builder";
-import { type IApplication, Logger } from "@chili3d/core";
+import type { IApplication } from "@chili3d/core";
 import { Loading } from "./loading";
-import { parseStartupParams } from "./startupParams";
 
 const loading = new Loading();
 document.body.appendChild(loading);
 
-async function handleApplicaionBuilt(app: IApplication) {
+function handleApplicaionBuilt(_app: IApplication) {
     document.body.removeChild(loading);
-
-    const { plugins, fileUrl } = parseStartupParams(window.location.search);
-    for (const plugin of plugins) {
-        Logger.info(`loading plugin from: ${plugin}`);
-        await app.pluginManager.loadFromUrl(plugin);
-    }
-    if (fileUrl) {
-        Logger.info(`loading file from: ${fileUrl}`);
-        await app.loadFileFromUrl(fileUrl);
-    }
 }
 
 // prettier-ignore
 new AppBuilder()
-    .useIndexedDB()
+    .useCloudStorage()
     .useWasmOcc()
     .useThree()
     .useUI()
     .build()
     .then(handleApplicaionBuilt)
     .catch((err) => {
-        alert(err.message);
+        // Экран «не загрузилось» вместо системного alert без объяснений
+        loading.showError(err?.message ?? String(err));
     });
