@@ -122,7 +122,6 @@ export default {
         "command.modify.trim": "Подрезать",
         "command.special.last": "__Last_COMMAND__",
         "command.test.performance": "Тест производительности",
-        "command.wechat.group": "Wechat",
         "command.workingPlane.alignToPlane": "Выравнивание",
         "command.workingPlane.fromSection": "Выделение",
         "command.workingPlane.set": "Установка",

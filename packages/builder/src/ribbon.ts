@@ -98,10 +98,6 @@ export const DefaultRibbon: RibbonTabProfile[] = [
                 groupName: "ribbon.group.importExport",
                 items: ["file.import", "file.export"],
             },
-            {
-                groupName: "ribbon.group.other",
-                items: ["wechat.group"],
-            },
         ],
     },
     {

@@ -181,31 +181,10 @@ export class Home extends HTMLElement {
     }
 
     private links() {
-        return div(
-            { className: style.socialPanel },
-            a(
-                {
-                    className: style.socialItem,
-                    href: "https://github.com/xiangechen/chili3d",
-                    target: "_blank",
-                    rel: "noopener noreferrer",
-                },
-                svg({ icon: "icon-github" }),
-                label({ textContent: "GitHub" }),
-            ),
-            button(
-                {
-                    className: style.socialItem,
-                    onclick: () => {
-                        PubSub.default.pub("executeCommand", "wechat.group");
-                    },
-                },
-                svg({
-                    icon: "icon-wechatGroup",
-                }),
-                label({ textContent: new Localize("command.wechat.group") }),
-            ),
-        );
+        // Форк «Макетки»: внешних ссылок (GitHub, чат сообщества) в интерфейсе
+        // нет — ребёнок на уроке не должен уходить из мастерской. Исходный код
+        // и лицензии живут на странице «О программе» в оболочке.
+        return div({ className: style.socialPanel });
     }
 
     private rightSection(documents: ObservableCollection<RecentDocumentDTO>, videoData: VideoData) {
