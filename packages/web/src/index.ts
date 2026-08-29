@@ -17,6 +17,7 @@ import { type CloudStorage, projectIdFromLocation } from "@chili3d/storage";
 import { SaveIndicator } from "@chili3d/ui";
 import { AutoSave } from "./autoSave";
 import { CoreGuard } from "./coreGuard";
+import { FirstHint } from "./firstHint";
 import { type LessonCard, LessonPanel } from "./lessonPanel";
 import { Loading } from "./loading";
 import { ScreenLock } from "./screenLock";
@@ -66,6 +67,7 @@ interface ProjectMeta {
     user: { name: string; avatar: string; role: string };
     lockMinutes: number;
     readOnly?: boolean;
+    showHint?: boolean;
 }
 
 async function fetchMeta(id: string): Promise<ProjectMeta | null> {
@@ -113,6 +115,15 @@ async function openProject(app: IApplication, autoSave: AutoSave) {
     }
     if (meta?.card?.steps?.length) {
         new LessonPanel(meta.card, id);
+    }
+    // Первый вход: три шага «куда нажимать». Отметку ставим сразу по закрытию —
+    // если запрос не дошёл, подсказка повторится, и это лучше, чем потерять её.
+    if (meta?.showHint) {
+        new FirstHint(() => {
+            void fetch("/api/hint-seen", { method: "POST", credentials: "same-origin" }).catch(
+                () => undefined,
+            );
+        });
     }
     // Страховка от падения ядра: сохраняем перед рискованной операцией и
     // честно объясняем ребёнку, если геометрия всё-таки не получилась.
