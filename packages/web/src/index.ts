@@ -21,10 +21,15 @@ import { FirstHint } from "./firstHint";
 import { type LessonCard, LessonPanel } from "./lessonPanel";
 import { Loading } from "./loading";
 import { ScreenLock } from "./screenLock";
+import { SourceNotice } from "./sourceNotice";
 import { UserBadge } from "./userBadge";
 
 const loading = new Loading();
 document.body.appendChild(loading);
+
+// AGPL §13: предложение исходников должно быть на странице всегда, а не только
+// когда работа успешно открылась. Поэтому — сразу, до сборки приложения.
+new SourceNotice();
 
 // Номер работы читаем тем же способом, что и хранилище: после удаления
 // страницы-обёртки адрес работы — это путь `/3d/6`, а не `?project=6`.
