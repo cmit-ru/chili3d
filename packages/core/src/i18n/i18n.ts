@@ -39,6 +39,13 @@ export class I18n {
     }
 
     static defaultLanguage(): string {
+        // «Макетка» — продукт для российских школ, и русский тут не «один из»
+        // языков, а язык урока: на компьютере класса с английской системой
+        // ребёнок получал английские названия команд. Переключить язык вручную
+        // по-прежнему можно, выбор запоминается.
+        if (languages.has("ru")) {
+            return "ru";
+        }
         const preferred = navigator.language.toLowerCase();
         const exact = languages.keys().find((key) => key.toLowerCase() === preferred);
         if (exact) {

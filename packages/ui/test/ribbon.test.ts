@@ -149,19 +149,24 @@ describe("RibbonUI", () => {
         return { ui, dataContent, tab1, tab2 };
     }
 
+    // Форк «Макетки»: в шапке стоит имя нашего продукта, а не «Chili3D - v0.7.0».
+    // Имя берётся из одной точки (BRAND_NAME) — продукт могут переименовать.
     test("should render root, title bar and app name", () => {
         const { ui } = createRibbonUI();
         expect(ui.className).toBe("r-root");
         expect(ui.querySelector(".r-title-bar")).not.toBeNull();
 
         const appName = mustQuery(ui, "#appName");
-        expect(appName.textContent).toContain("Chili3D - v");
+        expect(appName.textContent).toBe("Макетка");
+        expect(appName.textContent).not.toContain("Chili3D");
     });
 
-    test("should render github link", () => {
+    // Ссылки на чужие площадки из мастерской убраны: ребёнок на уроке не должен
+    // уходить в GitHub или чат сообщества. Требование AGPL закрывает отдельная
+    // ссылка на исходники в оболочке, а не кнопка в ленте команд.
+    test("should not render external links", () => {
         const { ui } = createRibbonUI();
-        const link = mustQuery(ui, "a");
-        expect(link.getAttribute("href")).toBe("https://github.com/xiangechen/chili3d");
+        expect(ui.querySelector("a")).toBeNull();
     });
 
     test("should render ribbon groups for each tab", () => {
@@ -170,11 +175,29 @@ describe("RibbonUI", () => {
         expect(groups.length).toBe(2);
     });
 
-    test("should publish displayHome when app icon clicked", () => {
+    // Домашний экран редактора скрыт: список работ живёт в кабинете оболочки,
+    // второй такой же экран только путал ребёнка. Поэтому клик по значку ведёт
+    // в кабинет, а не показывает домашний экран.
+    test("should open the cabinet when app icon clicked", () => {
         const { ui } = createRibbonUI();
         const appIcon = mustQuery(ui, ".r-app-icon");
+        const visited: string[] = [];
+        const location = window.location;
+        Object.defineProperty(window, "location", {
+            configurable: true,
+            value: {
+                ...location,
+                set href(value: string) {
+                    visited.push(value);
+                },
+            },
+        });
+
         appIcon.click();
-        expect(published.some((p) => p.topic === "displayHome" && p.args[0] === true)).toBe(true);
+
+        Object.defineProperty(window, "location", { configurable: true, value: location });
+        expect(visited).toEqual(["/projects"]);
+        expect(published.some((p) => p.topic === "displayHome")).toBe(false);
     });
 
     test("should publish executeCommand when quick command clicked", () => {

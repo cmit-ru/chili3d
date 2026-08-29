@@ -6,7 +6,6 @@ import {
     type ICommand,
     type IDataExchange,
     type IDocument,
-    type IPluginManager,
     type IShapeProvider,
     type IStorage,
     type IView,
@@ -21,7 +20,6 @@ export interface MockApplicationOverrides {
     shapeProvider?: Partial<IShapeProvider>;
     dataExchange?: Partial<IDataExchange>;
     services?: any[];
-    pluginManager?: Partial<IPluginManager>;
 }
 
 /**
@@ -63,16 +61,6 @@ export function createMockApplication(overrides: MockApplicationOverrides = {}):
             ...overrides.dataExchange,
         } as IDataExchange,
         services: overrides.services ?? [],
-        pluginManager: {
-            loadFromFile: async () => {},
-            loadFromUrl: async () => {},
-            unload: async () => {},
-            unloadAll: () => {},
-            getPlugins: () => [],
-            get: () => undefined,
-            isLoaded: () => false,
-            ...overrides.pluginManager,
-        },
         views: mockViews,
         documents: mockDocuments,
         activeView: undefined,

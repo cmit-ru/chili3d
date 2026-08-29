@@ -5,7 +5,6 @@ import type { CommandKeys, ICommand } from "./command";
 import type { IDataExchange } from "./dataExchange";
 import type { IDocument } from "./document";
 import type { IPropertyChanged, IStorage, ObservableCollection } from "./foundation";
-import type { IPluginManager } from "./plugin";
 import type { Serialized } from "./serialize";
 import type { IService } from "./service";
 import type { IShapeConverter, IShapeFactory, IShapeProvider } from "./shape";
@@ -21,7 +20,6 @@ export interface IApplication extends IPropertyChanged {
     readonly storage: IStorage;
     readonly views: ObservableCollection<IView>;
     readonly documents: Set<IDocument>;
-    readonly pluginManager: IPluginManager;
     lastCommand: CommandKeys | undefined;
     executingCommand: ICommand | undefined;
     activeView: IView | undefined;

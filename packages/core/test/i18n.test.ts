@@ -65,9 +65,19 @@ describe("I18n", () => {
             expect(I18n.defaultLanguage()).toBe("en");
         });
 
-        test("should return 'en' if browser language does not match", () => {
+        // В форке язык подбирается и по префиксу: «fr-FR» → словарь «fr»,
+        // иначе ребёнок с русской системой («ru-RU») получал английский.
+        test("should match by language prefix", () => {
             Object.defineProperty(navigator, "language", {
                 value: "fr-FR",
+                writable: true,
+            });
+            expect(I18n.defaultLanguage()).toBe("fr");
+        });
+
+        test("should return 'en' if browser language does not match", () => {
+            Object.defineProperty(navigator, "language", {
+                value: "ja-JP",
                 writable: true,
             });
             expect(I18n.defaultLanguage()).toBe("en");
@@ -252,5 +262,22 @@ describe("Localize", () => {
         const element = document.createElement("div");
         localize.set(element, "textContent");
         expect(element.textContent).toBe("Confirm");
+    });
+});
+
+/**
+ * Форк «Макетки»: язык урока — русский, даже если в классе английская система.
+ * Блок идёт последним: он регистрирует русский словарь в общей на модуль карте
+ * языков, и раньше он ломал бы соседние проверки, ждущие английского.
+ */
+describe("русский по умолчанию", () => {
+    test("выбирается независимо от языка браузера", () => {
+        Object.defineProperty(navigator, "language", { value: "en-US", writable: true });
+        I18n.addLanguage({
+            display: "Русский",
+            language: "ru",
+            translation: { "common.cancel": "Отмена" } as any,
+        });
+        expect(I18n.defaultLanguage()).toBe("ru");
     });
 });

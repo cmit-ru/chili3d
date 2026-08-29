@@ -310,32 +310,12 @@ describe("AppBuilder", () => {
         });
     });
 
-    describe("loadDefaultPlugins (protected)", () => {
-        afterEach(() => {
-            rs.unstubAllGlobals();
-        });
-
-        test("should not throw when fetch returns non-ok response", async () => {
-            const builder = new AppBuilder();
-            rs.stubGlobal(
-                "fetch",
-                rs.fn(() => Promise.resolve({ ok: false } as Response)),
-            );
-
-            const mockApp = { pluginManager: { loadFromUrl: rs.fn() } };
-            await expect((builder as any).loadDefaultPlugins(mockApp)).resolves.toBeUndefined();
-        });
-
-        test("should handle fetch error gracefully", async () => {
-            const builder = new AppBuilder();
-            rs.stubGlobal(
-                "fetch",
-                rs.fn(() => Promise.reject(new Error("network error"))),
-            );
-
-            const mockApp = { pluginManager: { loadFromUrl: rs.fn() } };
-            // Should not throw — catch block swallows errors
-            await expect((builder as any).loadDefaultPlugins(mockApp)).resolves.toBeUndefined();
+    // Форк «Макетки»: загрузка расширений удалена целиком (INV-006) — сборщик
+    // приложения больше не тянет чужой код ни из файла, ни по ссылке.
+    describe("расширения", () => {
+        test("сборщик не умеет загружать расширения", () => {
+            const builder = new AppBuilder() as unknown as Record<string, unknown>;
+            expect(builder["loadDefaultPlugins"]).toBeUndefined();
         });
     });
 });

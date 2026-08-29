@@ -9,7 +9,6 @@ import type { Serialized } from "./serialize";
 import type { Act, IVisual } from "./visual";
 
 export const DOCUMENT_FILE_EXTENSION = ".cd";
-export const PLUGIN_FILE_EXTENSION = ".chiliplugin";
 
 export interface IDocument extends IPropertyChanged, IDisposable {
     readonly selection: ISelection;

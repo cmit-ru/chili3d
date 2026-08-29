@@ -107,13 +107,10 @@ describe("Application", () => {
             expect(app.services).toEqual([]);
         });
 
-        test("should create PluginManager in constructor", () => {
-            expect(sharedApp.pluginManager).toBeDefined();
-            // plugins/manifests/shouldRevokes are implementation details, access via unknown
-            const pm = sharedApp.pluginManager as unknown as Record<string, unknown>;
-            expect(pm["plugins"]).toBeInstanceOf(Map);
-            expect(pm["manifests"]).toBeInstanceOf(Map);
-            expect(pm["shouldRevokes"]).toBeInstanceOf(Map);
+        // Форк «Макетки»: загрузка расширений удалена целиком — это исполнение
+        // произвольного кода на origin с сессией ребёнка (INV-006).
+        test("should not expose a plugin manager", () => {
+            expect((sharedApp as unknown as Record<string, unknown>)["pluginManager"]).toBeUndefined();
         });
 
         test("should initialize views as empty ObservableCollection", () => {
@@ -426,7 +423,6 @@ describe("Application", () => {
             expect(result.opens).toHaveLength(1);
             expect(result.opens[0]).toBe(cdFile);
             expect(result.imports).toHaveLength(0);
-            expect(result.plugins).toHaveLength(0);
         });
 
         test("should be case-insensitive for .cd extension", () => {
@@ -434,18 +430,15 @@ describe("Application", () => {
             expect(result.opens).toHaveLength(1);
         });
 
-        test("should group .chiliplugin files as plugins", () => {
+        // Форк «Макетки»: отдельной группы для расширений больше нет — файл
+        // .chiliplugin идёт в импорт и отклоняется как неизвестный формат,
+        // а не исполняется на origin с сессией ребёнка (INV-006).
+        test("should treat .chiliplugin as an ordinary unsupported file", () => {
             const pluginFile = new File([""], "my.plugin.chiliplugin");
             const result = callGroupFiles([pluginFile]);
-            expect(result.plugins).toHaveLength(1);
-            expect(result.plugins[0]).toBe(pluginFile);
+            expect(result.plugins).toBeUndefined();
+            expect(result.imports).toEqual([pluginFile]);
             expect(result.opens).toHaveLength(0);
-            expect(result.imports).toHaveLength(0);
-        });
-
-        test("should be case-insensitive for .chiliplugin extension", () => {
-            const result = callGroupFiles([new File([""], "my.CHILIPLUGIN")]);
-            expect(result.plugins).toHaveLength(1);
         });
 
         test("should group other files as imports", () => {
@@ -454,7 +447,6 @@ describe("Application", () => {
             expect(result.imports).toHaveLength(1);
             expect(result.imports[0]).toBe(stepFile);
             expect(result.opens).toHaveLength(0);
-            expect(result.plugins).toHaveLength(0);
         });
 
         test("should handle mixed file types", () => {
@@ -467,14 +459,12 @@ describe("Application", () => {
             ];
             const result = callGroupFiles(files);
             expect(result.opens).toHaveLength(2);
-            expect(result.plugins).toHaveLength(1);
-            expect(result.imports).toHaveLength(2);
+            expect(result.imports).toHaveLength(3);
         });
 
         test("should return empty arrays for empty file list", () => {
             const result = callGroupFiles([]);
             expect(result.opens).toHaveLength(0);
-            expect(result.plugins).toHaveLength(0);
             expect(result.imports).toHaveLength(0);
         });
     });
