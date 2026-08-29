@@ -197,26 +197,6 @@ export class Application extends Observable implements IApplication {
         return document;
     }
 
-    async loadFileFromUrl(url: string): Promise<void> {
-        return Promise.try(async () => {
-            const filename = url.substring(url.lastIndexOf("/") + 1);
-            if (!filename || !filename.includes(".")) {
-                throw new Error(`No file name in url: ${url}`);
-            }
-
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`Failed to fetch model: ${url}, statusText: ${response.statusText}`);
-            }
-
-            const blob = await response.blob();
-            const file = new File([blob], filename, { type: blob.type });
-            await this.importFiles([file]);
-        }).catch((err) => {
-            Logger.error(err);
-        });
-    }
-
     protected async createActiveView(document: IDocument | undefined) {
         if (document === undefined) return undefined;
         const view = document.visual.createView("3d", Plane.XY);

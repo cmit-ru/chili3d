@@ -73,7 +73,6 @@ export function createMockApplication(overrides: MockApplicationOverrides = {}):
         newDocument: async () => ({}) as IDocument,
         openDocument: async () => undefined,
         loadDocument: async () => undefined,
-        loadFileFromUrl: async () => {},
     };
 
     return app;

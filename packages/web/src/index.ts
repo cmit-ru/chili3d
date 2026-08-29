@@ -11,7 +11,6 @@
 //     домашний экран Chili3D не показывается: он дублировал бы кабинет;
 //   • подключены автосохранение и индикатор состояния.
 
-import { Document } from "@chili3d/app";
 import { AppBuilder } from "@chili3d/builder";
 import { type IApplication, PubSub } from "@chili3d/core";
 import { type CloudStorage, projectIdFromLocation } from "@chili3d/storage";
@@ -88,7 +87,11 @@ async function openProject(app: IApplication, autoSave: AutoSave) {
     // Работа могла быть ещё не начата (в облаке пусто) или сохранена другой
     // версией формата — тогда открывать нечего, начинаем с чистой сцены.
     // Без этого ребёнок попадал на домашний экран Chili3D вместо своей работы.
-    let doc = await Document.open(app, id).catch(() => undefined);
+    //
+    // Именно app.openDocument, а не Document.open: статический метод только
+    // читает документ, но не создаёт 3D-вид. Сохранённая работа открывалась без
+    // сцены — пустой экран, а любая команда отвечала «No active document».
+    let doc = await app.openDocument(id).catch(() => undefined);
     if (!doc) {
         doc = await app.newDocument(meta?.title ?? "Моя работа");
         await doc.save();

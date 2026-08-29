@@ -335,77 +335,14 @@ describe("Application", () => {
     });
 
     // ==========================================================================
-    // loadFileFromUrl
+    // Загрузка по ссылке
     // ==========================================================================
-    describe("loadFileFromUrl", () => {
-        let originalFetch: typeof fetch;
-        let errorSpy: ReturnType<typeof rs.spyOn>;
-
-        beforeEach(() => {
-            originalFetch = globalThis.fetch;
-            if (!(Promise as any).try) {
-                (Promise as any).try = (fn: (...args: any[]) => any, ...args: any[]) =>
-                    Promise.resolve().then(() => fn(...args));
-            }
-            errorSpy = rs.spyOn(Logger, "error").mockImplementation(() => {});
-        });
-
-        afterEach(() => {
-            globalThis.fetch = originalFetch;
-            errorSpy.mockRestore();
-        });
-
-        test("should fetch the URL, create a document and import the file", async () => {
-            const mockBlob = new Blob(["test content"], { type: "application/octet-stream" });
-            globalThis.fetch = (async () => ({
-                ok: true,
-                statusText: "OK",
-                blob: async () => mockBlob,
-            })) as unknown as typeof fetch;
-
-            const importCalls: { document: IDocument; files: File[] | FileList }[] = [];
-            sharedApp.dataExchange.import = async (document: IDocument, files: File[] | FileList) => {
-                importCalls.push({ document, files });
-            };
-
-            let importCallback: (() => Promise<void>) | undefined;
-            PubSub.default.sub("showPermanent", (callback: () => Promise<void>) => {
-                importCallback = callback;
-            });
-
-            await sharedApp.loadFileFromUrl("https://example.com/model.step");
-
-            // A new document is created for the imported file
-            expect(sharedApp.documents.size).toBe(1);
-            const doc = [...sharedApp.documents][0];
-            expect(doc.name).toBe("Untitled");
-            expect(sharedApp.activeView?.document).toBe(doc);
-            expect(errorSpy).not.toHaveBeenCalled();
-
-            // The actual import runs inside the showPermanent callback
-            expect(importCallback).not.toBeUndefined();
-            await importCallback!();
-            expect(importCalls).toHaveLength(1);
-            expect(importCalls[0].document).toBe(doc);
-            expect(importCalls[0].files[0].name).toBe("model.step");
-        });
-
-        test("should log the error and not import anything when fetch fails", async () => {
-            globalThis.fetch = (async () => ({
-                ok: false,
-                statusText: "Not Found",
-                blob: async () => new Blob(),
-            })) as unknown as typeof fetch;
-
-            const importSpy = rs.fn(async (_document: IDocument, _files: File[] | FileList) => {});
-            sharedApp.dataExchange.import = importSpy;
-
-            await sharedApp.loadFileFromUrl("https://example.com/model.step");
-
-            expect(errorSpy).toHaveBeenCalled();
-            expect(importSpy).not.toHaveBeenCalled();
-            expect(sharedApp.documents.size).toBe(0);
-            expect(sharedApp.activeView).toBeUndefined();
+    // Форк «Макетки»: метод loadFileFromUrl удалён вместе с параметрами URL
+    // (INV-006) — он скачивал и импортировал произвольный файл по чужой ссылке
+    // на origin с сессией ребёнка.
+    describe("загрузка по ссылке", () => {
+        test("приложение не умеет загружать файл по ссылке", () => {
+            expect((sharedApp as unknown as Record<string, unknown>)["loadFileFromUrl"]).toBeUndefined();
         });
     });
 
