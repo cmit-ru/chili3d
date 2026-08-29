@@ -17,6 +17,7 @@ import { type IApplication, PubSub } from "@chili3d/core";
 import type { CloudStorage } from "@chili3d/storage";
 import { SaveIndicator } from "@chili3d/ui";
 import { AutoSave } from "./autoSave";
+import { CoreGuard } from "./coreGuard";
 import { type LessonCard, LessonPanel } from "./lessonPanel";
 import { Loading } from "./loading";
 import { ScreenLock } from "./screenLock";
@@ -97,6 +98,23 @@ async function openProject(app: IApplication, autoSave: AutoSave) {
     if (meta?.card?.steps?.length) {
         new LessonPanel(meta.card, id);
     }
+    // Страховка от падения ядра: сохраняем перед рискованной операцией и
+    // честно объясняем ребёнку, если геометрия всё-таки не получилась.
+    new CoreGuard(
+        app,
+        () => autoSave.saveNow(doc),
+        (event, props) => {
+            void fetch("/api/events", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    events: [{ event, props, projectId: Number(id), ts: new Date().toISOString() }],
+                }),
+            }).catch(() => undefined);
+        },
+    );
+
     if (meta?.user && meta.user.role === "student") {
         new ScreenLock({
             minutes: meta.lockMinutes ?? 10,
