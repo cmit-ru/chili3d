@@ -31,22 +31,33 @@ describe("DefaultRibbon", () => {
         expect(DefaultRibbon[0].tabName).toBe("ribbon.tab.model");
     });
 
-    test("second tab should be manager tab", () => {
-        expect(DefaultRibbon[1].tabName).toBe("ribbon.tab.manager");
+    // Форк «Макетки»: вкладка «Менеджер» убрана — в ней жила только команда
+    // замера скорости, которая строит тысячи фигур и вешает школьный ноутбук.
+    test("should have a single tab", () => {
+        expect(DefaultRibbon).toHaveLength(1);
     });
 
-    test("model tab should contain draw, modify, converter, boolean groups", () => {
+    test("model tab should contain the groups a child needs first", () => {
         const modelTab = DefaultRibbon[0];
         const groupNames = modelTab.groups.map((g) => g.groupName);
         expect(groupNames).toContain("ribbon.group.draw");
         expect(groupNames).toContain("ribbon.group.modify");
-        expect(groupNames).toContain("ribbon.group.converter");
         expect(groupNames).toContain("ribbon.group.boolean");
-        expect(groupNames).toContain("ribbon.group.workingPlane");
         expect(groupNames).toContain("ribbon.group.tools");
-        expect(groupNames).toContain("ribbon.group.measure");
         expect(groupNames).toContain("ribbon.group.act");
         expect(groupNames).toContain("ribbon.group.importExport");
+    });
+
+    // Стена из полусотни кнопок — главная причина, почему ребёнок не доходит до
+    // первой фигуры за минуту (§10). Наверху держим только нужное на уроке.
+    test("visible commands should stay few enough for a first lesson", () => {
+        // В upstream на первом уровне около полусотни команд; держим вдвое меньше.
+        const visible = DefaultRibbon[0].groups.flatMap((g) => flattenItems(g.items));
+        expect(visible.length).toBeLessThanOrEqual(26);
+        expect(visible).toContain("create.box");
+        expect(visible).toContain("modify.fillet");
+        expect(visible).toContain("boolean.cut");
+        expect(visible).toContain("file.export");
     });
 
     test("draw group should contain create commands", () => {
