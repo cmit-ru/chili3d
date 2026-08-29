@@ -117,20 +117,16 @@ function makeTab(name: string): RibbonTab {
 describe("RibbonUI", () => {
     let published: { topic: string; args: unknown[] }[];
     let pubCallback: (...args: unknown[]) => void;
-    let homeCallback: (...args: unknown[]) => void;
 
     beforeEach(() => {
         published = [];
         pubCallback = (...args: unknown[]) => published.push({ topic: "executeCommand", args });
-        homeCallback = (...args: unknown[]) => published.push({ topic: "displayHome", args });
         PubSub.default.sub("executeCommand", pubCallback);
-        PubSub.default.sub("displayHome", homeCallback);
         CommandStore.registerCommand(TestCommand, { key: CMD_QUICK, icon: "icon-quick" });
     });
 
     afterEach(() => {
         PubSub.default.remove("executeCommand", pubCallback);
-        PubSub.default.remove("displayHome", homeCallback);
         CommandStore.unregisterCommand(CMD_QUICK);
     });
 
@@ -175,9 +171,9 @@ describe("RibbonUI", () => {
         expect(groups.length).toBe(2);
     });
 
-    // Домашний экран редактора скрыт: список работ живёт в кабинете оболочки,
-    // второй такой же экран только путал ребёнка. Поэтому клик по значку ведёт
-    // в кабинет, а не показывает домашний экран.
+    // Домашнего экрана редактора в форке нет вовсе: список работ живёт в
+    // кабинете оболочки, а мелькавший «Добро пожаловать…» только сбивал
+    // ребёнка. Клик по значку ведёт в кабинет.
     test("should open the cabinet when app icon clicked", () => {
         const { ui } = createRibbonUI();
         const appIcon = mustQuery(ui, ".r-app-icon");
@@ -197,7 +193,6 @@ describe("RibbonUI", () => {
 
         Object.defineProperty(window, "location", { configurable: true, value: location });
         expect(visited).toEqual(["/projects"]);
-        expect(published.some((p) => p.topic === "displayHome")).toBe(false);
     });
 
     test("should publish executeCommand when quick command clicked", () => {

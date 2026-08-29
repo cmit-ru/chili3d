@@ -4,7 +4,6 @@
 import {
     type CommandKeys,
     Config,
-    debounce,
     I18n,
     type IApplication,
     type IWindow,
@@ -20,7 +19,6 @@ import "./iconfont.js";
 import { showDialog } from "./dialog";
 import { Editor } from "./editor";
 import { showFloatPanel } from "./floatPanel";
-import { Home } from "./home";
 import { Permanent } from "./permanent";
 import { Toast } from "./toast";
 
@@ -29,7 +27,6 @@ const quickCommands: CommandKeys[] = ["doc.save", "doc.saveToFile", "edit.undo",
 export class MainWindow extends HTMLElement implements IWindow {
     readonly ribbon: Ribbon;
     private _inited: boolean = false;
-    private _home?: Home;
     private _editor?: Editor;
 
     constructor(
@@ -69,7 +66,9 @@ export class MainWindow extends HTMLElement implements IWindow {
 
         await this.loadCss();
         this.applyTheme();
-        await this._initHome(app);
+        // Форк «Макетки»: домашнего экрана редактора нет. Список работ живёт в
+        // кабинете оболочки, а этот экран успевал мелькнуть «Добро пожаловать…»
+        // между кабинетом и работой — лишний кадр, который сбивает ребёнка.
         this._initEditor(app);
         this._initEventHandlers(app);
     }
@@ -79,14 +78,11 @@ export class MainWindow extends HTMLElement implements IWindow {
     }
 
     private _initEventHandlers(app: IApplication) {
-        const displayHome = debounce(this.displayHome, 100);
         PubSub.default.sub("showToast", Toast.info);
         PubSub.default.sub("displayError", Toast.error);
         PubSub.default.sub("showDialog", showDialog);
         PubSub.default.sub("showFloatPanel", showFloatPanel);
         PubSub.default.sub("showPermanent", Permanent.show);
-        PubSub.default.sub("activeViewChanged", (view) => displayHome(app, view === undefined));
-        PubSub.default.sub("displayHome", (show) => displayHome(app, show));
 
         Config.instance.onPropertyChanged(this.handleConfigChanged);
         window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener("change", () => {
@@ -94,21 +90,6 @@ export class MainWindow extends HTMLElement implements IWindow {
                 this.applyTheme();
             }
         });
-    }
-
-    private readonly displayHome = (app: IApplication, displayHome: boolean) => {
-        if (this._home) {
-            this._home.remove();
-            this._home = undefined;
-        }
-        if (displayHome) {
-            this._initHome(app);
-        }
-    };
-
-    private async _initHome(app: IApplication) {
-        this._home = new Home(app);
-        await this._home.render();
     }
 
     private async _initEditor(app: IApplication) {

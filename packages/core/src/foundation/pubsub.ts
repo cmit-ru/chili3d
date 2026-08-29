@@ -21,7 +21,6 @@ export interface PubSubEventMap {
     clearStatusBarTip: () => void;
     closeCommandContext: () => void;
     displayError: (message: string) => void;
-    displayHome: (show: boolean) => void;
     documentClosed: (document: IDocument) => void;
     editMaterial: (document: IDocument, material: Material, callback: (material: Material) => void) => void;
     executeCommand: (commandName: CommandKeys) => void;

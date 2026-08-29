@@ -12,7 +12,7 @@
 //   • подключены автосохранение и индикатор состояния.
 
 import { AppBuilder } from "@chili3d/builder";
-import { type IApplication, PubSub } from "@chili3d/core";
+import type { IApplication } from "@chili3d/core";
 import { type CloudStorage, projectIdFromLocation } from "@chili3d/storage";
 import { SaveIndicator } from "@chili3d/ui";
 import { AutoSave } from "./autoSave";
@@ -101,9 +101,6 @@ async function openProject(app: IApplication, autoSave: AutoSave) {
 
     autoSave.watch(doc);
     autoSave.attachUnloadGuard(doc);
-
-    // Домашний экран редактора скрываем: список работ живёт в кабинете оболочки.
-    PubSub.default.pub("displayHome", false);
 
     if (meta?.user) {
         new UserBadge({
