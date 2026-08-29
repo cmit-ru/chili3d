@@ -14,7 +14,7 @@
 import { Document } from "@chili3d/app";
 import { AppBuilder } from "@chili3d/builder";
 import { type IApplication, PubSub } from "@chili3d/core";
-import type { CloudStorage } from "@chili3d/storage";
+import { type CloudStorage, projectIdFromLocation } from "@chili3d/storage";
 import { SaveIndicator } from "@chili3d/ui";
 import { AutoSave } from "./autoSave";
 import { CoreGuard } from "./coreGuard";
@@ -26,10 +26,11 @@ import { UserBadge } from "./userBadge";
 const loading = new Loading();
 document.body.appendChild(loading);
 
-function projectId(): string | null {
-    const value = new URLSearchParams(window.location.search).get("project");
-    return value && /^\d+$/.test(value) ? value : null;
-}
+// Номер работы читаем тем же способом, что и хранилище: после удаления
+// страницы-обёртки адрес работы — это путь `/3d/6`, а не `?project=6`.
+// Пока здесь смотрели только на параметр запроса, openProject молча выходил:
+// ребёнок видел домашний экран Chili3D, без имени, шагов урока и автосохранения.
+const projectId = projectIdFromLocation;
 
 function attachSaveIndicator(app: IApplication, autoSave: AutoSave) {
     const storage = app.storage as unknown as CloudStorage;
@@ -51,7 +52,9 @@ function attachSaveIndicator(app: IApplication, autoSave: AutoSave) {
         // Обе ветки сначала сохраняют копию: нажатием работу не потерять.
         const copy = await storage.saveAsCopy(body);
         if (keepMine && copy) {
-            window.location.search = `?project=${copy.id}`;
+            // Копия — отдельная работа со своим адресом; доступ к ней оболочка
+            // проверит тем же подзапросом, что и к исходной.
+            window.location.assign(`/3d/${copy.id}`);
             return;
         }
         window.location.reload();

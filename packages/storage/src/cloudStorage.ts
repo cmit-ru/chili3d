@@ -25,11 +25,14 @@ const BUFFER_DB = "maketka-buffer";
 const BUFFER_STORE = "edits";
 
 /**
- * Адрес работы приходит от оболочки: она проверяет доступ на сервере ДО того,
- * как ребёнок начнёт качать десять мегабайт ядра, и открывает редактор рамкой
- * (iframe — отдельный документ, закрытого кода на этой странице нет, ADR 1300).
+ * Номер работы берём ИЗ АДРЕСА, а не из документа: ребёнок приходит по ссылке
+ * вида `/3d/6`, доступ к которой оболочка уже проверила подзапросом. Внутренний
+ * идентификатор документа Chili3D («mnz21j4…») сервер не знает — попытка
+ * сохранять по нему заканчивалась пятисоткой и потерей работы.
+ *
+ * Форма `?project=6` остаётся для локальной разработки без nginx.
  */
-function projectIdFromLocation(): string | null {
+export function projectIdFromLocation(): string | null {
     const fromQuery = new URLSearchParams(window.location.search).get("project");
     if (fromQuery && /^\d+$/.test(fromQuery)) return fromQuery;
     const match = /\/3d\/(\d+)/.exec(window.location.pathname);
