@@ -25,6 +25,10 @@ import style from "./ribbon.module.css";
 import { RibbonPushButton } from "./ribbonButton";
 import { RibbonGroupElement } from "./ribbonGroup";
 
+// Имя продукта задаёт оболочка (ребрендинг-готовность из ТЗ §9):
+// переименование не должно требовать правок в коде редактора.
+const BRAND_NAME = (globalThis as { MAKETKA_BRAND?: string }).MAKETKA_BRAND ?? "Макетка";
+
 export const QuickButton = (command: ICommand) => {
     const data = CommandStore.getComandData(command);
     if (!data) {
@@ -114,17 +118,27 @@ export class RibbonUI extends HTMLElement {
     private leftPanel() {
         return div(
             { className: style.left },
+            // Форк «Макетки»: имя продукта берётся из настроек оболочки, а клик
+            // ведёт в кабинет с работами. Домашний экран редактора скрыт —
+            // список работ живёт в кабинете, и второй такой же только путает.
             div(
-                { className: style.appIcon, onclick: () => PubSub.default.pub("displayHome", true) },
+                {
+                    className: style.appIcon,
+                    onclick: () => {
+                        window.location.href = "/projects";
+                    },
+                },
                 svg({ className: style.icon, icon: "icon-chili" }),
-                span({ id: "appName", textContent: `Chili3D - v${__APP_VERSION__}` }),
+                span({ id: "appName", textContent: BRAND_NAME }),
             ),
             div(
                 { className: style.ribbonTitlePanel },
                 svg({
                     className: style.home,
                     icon: "icon-home",
-                    onclick: () => PubSub.default.pub("displayHome", true),
+                    onclick: () => {
+                        window.location.href = "/projects";
+                    },
                 }),
                 collection({
                     className: style.quickCommands,
@@ -204,13 +218,9 @@ export class RibbonUI extends HTMLElement {
     }
 
     private rightPanel() {
-        return div(
-            { className: style.right },
-            a(
-                { href: "https://github.com/xiangechen/chili3d", target: "_blank" },
-                svg({ title: "Github", className: style.icon, icon: "icon-github" }),
-            ),
-        );
+        // Внешних ссылок в шапке нет: ребёнок на уроке не должен уходить из
+        // мастерской. Исходный код и лицензии — на странице «О программе».
+        return div({ className: style.right });
     }
 
     private ribbonTabs() {

@@ -21,6 +21,7 @@ import { CoreGuard } from "./coreGuard";
 import { type LessonCard, LessonPanel } from "./lessonPanel";
 import { Loading } from "./loading";
 import { ScreenLock } from "./screenLock";
+import { UserBadge } from "./userBadge";
 
 const loading = new Loading();
 document.body.appendChild(loading);
@@ -62,6 +63,7 @@ interface ProjectMeta {
     card: LessonCard | null;
     user: { name: string; avatar: string; role: string };
     lockMinutes: number;
+    readOnly?: boolean;
 }
 
 async function fetchMeta(id: string): Promise<ProjectMeta | null> {
@@ -95,6 +97,14 @@ async function openProject(app: IApplication, autoSave: AutoSave) {
     // Домашний экран редактора скрываем: список работ живёт в кабинете оболочки.
     PubSub.default.pub("displayHome", false);
 
+    if (meta?.user) {
+        new UserBadge({
+            name: meta.user.name,
+            avatar: meta.user.avatar,
+            role: meta.user.role,
+            readOnly: Boolean(meta.readOnly),
+        });
+    }
     if (meta?.card?.steps?.length) {
         new LessonPanel(meta.card, id);
     }
