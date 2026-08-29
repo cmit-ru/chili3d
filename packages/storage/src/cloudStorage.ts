@@ -123,9 +123,12 @@ export class CloudStorage implements IStorage {
         await this.buffer.get("warmup");
     }
 
-    async get(_database: string, table: string, id: string): Promise<any> {
+    async get(_database: string, table: string, _id: string): Promise<any> {
         if (table !== "documents") return undefined;
-        const projectId = id || projectIdFromLocation();
+        // Адрес работы берём ТОЛЬКО из URL: ядро подставляет сюда свой
+        // внутренний id документа, и сохранение уходило по нему на сервер
+        // (POST /api/projects/mnz21j4…/save → 500), то есть в никуда.
+        const projectId = projectIdFromLocation();
         if (!projectId) return undefined;
 
         const response = await fetch(`/api/projects/${projectId}`, { credentials: "same-origin" });
@@ -143,7 +146,7 @@ export class CloudStorage implements IStorage {
         return project.body ?? undefined;
     }
 
-    async put(_database: string, table: string, id: string, value: any): Promise<boolean> {
+    async put(_database: string, table: string, _id: string, value: any): Promise<boolean> {
         // Список недавних документов не храним — лента работ живёт в кабинете.
         // Но именно с ним ядро отдаёт свежий снимок сцены: забираем его на превью.
         if (table !== "documents") {
@@ -151,7 +154,7 @@ export class CloudStorage implements IStorage {
             return true;
         }
 
-        const projectId = id || projectIdFromLocation();
+        const projectId = projectIdFromLocation();
         if (!projectId) return false;
 
         const rev = this.revisions.get(projectId) ?? 0;
@@ -193,8 +196,10 @@ export class CloudStorage implements IStorage {
         return true;
     }
 
-    async delete(_database: string, _table: string, id: string): Promise<boolean> {
-        const response = await fetch(`/projects/${id}/delete`, {
+    async delete(_database: string, _table: string, _id: string): Promise<boolean> {
+        const projectId = projectIdFromLocation();
+        if (!projectId) return false;
+        const response = await fetch(`/projects/${projectId}/delete`, {
             method: "POST",
             credentials: "same-origin",
         });
