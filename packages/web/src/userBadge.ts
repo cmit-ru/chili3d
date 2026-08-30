@@ -13,6 +13,8 @@ export interface UserBadgeOptions {
     avatar: string;
     role: string;
     readOnly: boolean;
+    /** Общий компьютер класса: показывает «Передать компьютер». */
+    sharedPc?: boolean;
 }
 
 export class UserBadge {
@@ -51,9 +53,10 @@ export class UserBadge {
         works.textContent = "Мои работы";
         works.style.cssText = "color:#0e7a5f;text-decoration:none;font-weight:600";
 
-        // «Передать компьютер» — для ребёнка, который уступает место соседу:
-        // работа сохранится, компьютер вернётся к «Кто ты?» (ТЗ §4). Рядом
-        // остаётся «Это не я» — для того, кто увидел чужое имя.
+        // «Передать компьютер» — только в режиме общего компьютера класса
+        // (опция группы shared_pc): ребёнок уступает место соседу, работа
+        // сохранена, компьютер возвращается к «Кто ты?» (ТЗ §4). Дома и на
+        // личном устройстве кнопки нет — там она только путает.
         const handover = document.createElement("a");
         handover.href = "/logout-form";
         handover.textContent = "Передать компьютер";
@@ -72,7 +75,7 @@ export class UserBadge {
         `;
 
         root.append(avatar, name, works);
-        if (this.options.role === "student") root.append(handover);
+        if (this.options.role === "student" && this.options.sharedPc) root.append(handover);
         root.append(leave);
         document.body.appendChild(root);
     }

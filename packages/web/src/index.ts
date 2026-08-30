@@ -73,6 +73,7 @@ interface ProjectMeta {
     lockMinutes: number;
     readOnly?: boolean;
     showHint?: boolean;
+    sharedPc?: boolean;
 }
 
 async function fetchMeta(id: string): Promise<ProjectMeta | null> {
@@ -113,6 +114,7 @@ async function openProject(app: IApplication, autoSave: AutoSave) {
             avatar: meta.user.avatar,
             role: meta.user.role,
             readOnly: Boolean(meta.readOnly),
+            sharedPc: Boolean(meta.sharedPc),
         });
     }
     if (meta?.card?.steps?.length) {
@@ -146,10 +148,10 @@ async function openProject(app: IApplication, autoSave: AutoSave) {
 
     if (meta?.user && meta.user.role === "student") {
         new ScreenLock({
-            minutes: meta.lockMinutes ?? 10,
-            // Ещё столько же в замке — и автовыход к «Кто ты?» (ТЗ §4:
-            // профиль «общий компьютер класса»).
-            autoExitMinutes: meta.lockMinutes ?? 10,
+            minutes: meta.lockMinutes ?? 30,
+            // Автовыход к «Кто ты?» — только на общем компьютере класса (ТЗ §4);
+            // дома замок информационный и никого не выкидывает.
+            autoExitMinutes: meta.sharedPc ? (meta.lockMinutes ?? 10) : 0,
             userName: meta.user.name,
             userAvatar: meta.user.avatar,
             hasUnsaved: () => autoSave.hasPending(),
