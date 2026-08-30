@@ -162,13 +162,18 @@ export class AiOps {
         private readonly saveNow: () => Promise<unknown>,
     ) {
         this.shield = document.createElement("div");
-        this.shield.style.cssText = "position:fixed;inset:0;z-index:55;display:none;background:transparent";
+        // Щит не перекрывает экран физически: камера (правая/средняя кнопка,
+        // колесо, Shift+колесо) должна работать, пока помощник строит.
+        // Блокируются только левые клики — отдельным capture-перехватчиком.
+        this.shield.style.cssText =
+            "position:fixed;inset:0;z-index:55;display:none;background:transparent;pointer-events:none";
         const bar = document.createElement("div");
         bar.style.cssText =
             "position:absolute;top:14px;left:50%;transform:translateX(-50%);display:flex;" +
             "align-items:center;gap:14px;background:#1f2430;color:#fff;padding:12px 18px;" +
             "border-radius:10px;font:14px/1.5 system-ui,sans-serif;" +
-            "box-shadow:0 6px 24px rgba(0,0,0,.4);max-width:min(92vw,560px);border:1px solid #5a6272";
+            "box-shadow:0 6px 24px rgba(0,0,0,.4);max-width:min(92vw,560px);border:1px solid #5a6272;" +
+            "pointer-events:auto";
         this.statusLine = document.createElement("div");
         // Цвет и шрифт — прямо на элементе: темы редактора перебивают
         // унаследованные от контейнера значения (тёмный текст на тёмном фоне).
@@ -186,12 +191,29 @@ export class AiOps {
         this.schedule(IDLE_MS);
     }
 
-    /** Щит на время пакета: видно всё, нажать ничего нельзя — работает помощник. */
+    /** Перехват ЛЕВЫХ кликов на время пакета: выбор и перетаскивание не
+     *  проходят, а вращение и зум камеры (правая/средняя кнопка, колесо) —
+     *  работают. Кнопка «Остановить» и плашка живут поверх перехвата. */
+    private readonly clickBlocker = (event: Event) => {
+        const e = event as MouseEvent;
+        if (e.button !== 0) return;
+        if (this.shield.contains(e.target as Node)) return;
+        e.stopPropagation();
+        e.preventDefault();
+    };
+
+    private blockClicks(on: boolean) {
+        const method = on ? "addEventListener" : "removeEventListener";
+        window[method]("pointerdown", this.clickBlocker, true);
+        window[method]("click", this.clickBlocker, true);
+    }
+
+    /** Плашка на время пакета: видно всё, камера крутится, клики не проходят. */
     private show(text: string, options?: { blocking?: boolean; stoppable?: boolean }) {
         if (this.hideTimer) window.clearTimeout(this.hideTimer);
         this.statusLine.textContent = text;
         this.shield.style.display = "block";
-        this.shield.style.pointerEvents = options?.blocking === false ? "none" : "auto";
+        this.blockClicks(options?.blocking !== false);
         this.stopButton.style.display = options?.stoppable === false ? "none" : "block";
     }
 
@@ -202,6 +224,7 @@ export class AiOps {
 
     private hide() {
         this.shield.style.display = "none";
+        this.blockClicks(false);
     }
 
     private async cancel() {
