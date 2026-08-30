@@ -23,6 +23,7 @@ import { Loading } from "./loading";
 import { ScreenLock } from "./screenLock";
 import { SourceNotice } from "./sourceNotice";
 import { UserBadge } from "./userBadge";
+import { ViewBanner } from "./viewBanner";
 
 const loading = new Loading();
 document.body.appendChild(loading);
@@ -74,6 +75,8 @@ interface ProjectMeta {
     readOnly?: boolean;
     showHint?: boolean;
     sharedPc?: boolean;
+    viewingOthers?: boolean;
+    ownerName?: string;
 }
 
 async function fetchMeta(id: string): Promise<ProjectMeta | null> {
@@ -105,8 +108,33 @@ async function openProject(app: IApplication, autoSave: AutoSave) {
         await doc.save();
     }
 
-    autoSave.watch(doc);
-    autoSave.attachUnloadGuard(doc);
+    // Чужая работа открывается в просмотре: автосохранение включается только
+    // после явного «Править» — случайная перезапись детской работы невозможна.
+    const startSaving = () => {
+        autoSave.watch(doc);
+        autoSave.attachUnloadGuard(doc);
+    };
+    if (meta?.viewingOthers) {
+        new ViewBanner({
+            ownerName: meta.ownerName || "ученик",
+            canEdit: !meta.readOnly,
+            onEdit: startSaving,
+            onCopy: async () => {
+                try {
+                    const response = await fetch(`/api/projects/${id}/copy`, {
+                        method: "POST",
+                        credentials: "same-origin",
+                    });
+                    if (!response.ok) return null;
+                    return ((await response.json()) as { id: number }).id;
+                } catch {
+                    return null;
+                }
+            },
+        });
+    } else {
+        startSaving();
+    }
 
     if (meta?.user) {
         new UserBadge({
