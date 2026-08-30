@@ -558,7 +558,14 @@ export class AiOps {
     }
 
     private unwrap<T>(result: Result<T>, what: string): T {
-        if (!result.isOk) throw new Error(`${what}: ${String(result.error).slice(0, 120)}`);
+        if (!result.isOk) {
+            const raw = result.error as unknown;
+            const text =
+                typeof raw === "string"
+                    ? raw
+                    : ((raw as { message?: string })?.message ?? JSON.stringify(raw));
+            throw new Error(`${what}: ${String(text).slice(0, 120)}`);
+        }
         return result.value;
     }
 
@@ -598,15 +605,19 @@ export class AiOps {
         this.nodesByStep.set(stepNo, fresh);
     }
 
+    /** Индексы рёбер для ядра. Снаружи (кадр edges_of, параметр edges) номера
+     *  человеческие — 1..N; ядро ждёт 0-based и само прибавляет единицу к
+     *  карте OCCT. 1-based на входе ядра давал выход за карту и нечитаемое
+     *  «Fillet Error: [object Object]» (боевой отчёт помощника). */
     private edgeIndexes(shape: IShape, wanted?: number[]): number[] {
         const total = shape.findSubShapes(ShapeTypes.edge).length;
-        if (!wanted?.length) return Array.from({ length: total }, (_, i) => i + 1);
+        if (!wanted?.length) return Array.from({ length: total }, (_, i) => i);
         for (const e of wanted) {
             if (!Number.isInteger(e) || e < 1 || e > total) {
                 throw new Error(`ребра №${e} нет: у фигуры ${total} рёбер`);
             }
         }
-        return wanted;
+        return wanted.map((e) => e - 1);
     }
 
     private apply(stepNo: number, op: OpData) {
