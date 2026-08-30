@@ -56,7 +56,15 @@ function convertShapeResult<P extends unknown[] = unknown[]>(
     try {
         result = factory(...params);
     } catch (err) {
-        return Result.err(`${errorString}: ${err}`);
+        // Исключения из wasm — не Error: «${err}» давал нечитаемое
+        // «[object Object]». Достаём текст, какой есть (форк «Макетки»).
+        const text =
+            err instanceof Error
+                ? err.message
+                : typeof err === "number"
+                  ? `internal kernel error #${err}`
+                  : ((err as { message?: string })?.message ?? Object.prototype.toString.call(err));
+        return Result.err(`${errorString}: ${text}`);
     }
 
     let res: Result<IShape, string>;
