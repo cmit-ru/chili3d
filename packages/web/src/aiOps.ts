@@ -201,7 +201,7 @@ export class AiOps {
     }
 
     private async poll(): Promise<number> {
-        const response = await fetch(`/api/projects/${this.projectId}/ops-poll`, {
+        const response = await fetch(`/api/projects/${this.projectId}/ops-poll?dict=${DICT_VERSION}`, {
             credentials: "same-origin",
         });
         if (!response.ok) return IDLE_MS;
@@ -223,19 +223,21 @@ export class AiOps {
 
         const batch = data.batch;
         this.wasActive = true;
+        // Пакет для другой версии словаря: руль нам не дали — и правильно.
+        // Пакет не трогаем (его исполнит свежая вкладка), человеку — подсказка.
+        if (data.role === "stale" || batch.dict_version !== DICT_VERSION) {
+            this.show("Помощник прислал задание для обновлённого редактора — обновите страницу (F5).", {
+                blocking: false,
+                stoppable: false,
+            });
+            return IDLE_MS;
+        }
         if (data.role !== "executor" || !this.canExecute()) {
             const appliedCount = batch.steps.filter((s) => s.applied).length;
             this.show(
                 `Сейчас строит помощник (в другой вкладке): шаг ${appliedCount} из ${batch.steps.length}. Пожалуйста, ничего не нажимайте.`,
             );
             return ACTIVE_MS;
-        }
-
-        if (batch.dict_version !== DICT_VERSION) {
-            await this.report(batch.id, 1, false, "словарь операций другой версии — обновите вкладку");
-            this.showFinal("Помощник говорит на другой версии словаря — обновите страницу.");
-            this.wasActive = false;
-            return IDLE_MS;
         }
 
         const step = batch.steps.find((s) => !s.applied);
