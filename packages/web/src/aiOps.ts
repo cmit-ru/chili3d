@@ -23,6 +23,7 @@ import {
     ConeNode,
     CylinderNode,
     ExtrudeNode,
+    PipeNode,
     PolygonNode,
     RegularPolygonNode,
     RevolvedNode,
@@ -49,7 +50,7 @@ import {
 import { sceneVolumeMm3 } from "./volume";
 
 /** Версия словаря операций. Пакет другой версии не исполняется (tz-ai.md §5). */
-const DICT_VERSION = 3;
+const DICT_VERSION = 4;
 
 const IDLE_MS = 2_000;
 const ACTIVE_MS = 1_000;
@@ -88,6 +89,8 @@ interface OpData {
     factor?: number;
     thickness?: number;
     edges?: number[];
+    pitch?: number;
+    turns?: number;
 }
 
 interface OpsStep {
@@ -815,12 +818,14 @@ export class AiOps {
                 return;
             }
             case "размножить_по_кругу": {
+                // v4: вокруг заданной точки (cx, cy); без неё — вокруг (0, 0).
                 const target = this.node(op.node);
                 const count = Number(op.count);
+                const center = new XYZ({ x: Number(op.cx ?? 0), y: Number(op.cy ?? 0), z: 0 });
                 for (let i = 1; i < count; i++) {
                     const clone = target.clone();
                     clone.transform = target.transform.multiply(
-                        Matrix4.fromAxisRad(XYZ.zero, XYZ.unitZ, (2 * Math.PI * i) / count),
+                        Matrix4.fromAxisRad(center, XYZ.unitZ, (2 * Math.PI * i) / count),
                     );
                     target.parent?.insertAfter(target, clone);
                 }
@@ -843,6 +848,27 @@ export class AiOps {
                 }
                 this.nodesByStep.set(stepNo, target);
                 return;
+            }
+            case "спираль": {
+                // Пружина/резьба телом: путь-геликоида + труба по нему (v4).
+                const wire = this.unwrap(
+                    shapeFactory.helix(
+                        xyz(op),
+                        XYZ.unitZ,
+                        XYZ.unitX,
+                        Number(op.radius),
+                        Number(op.pitch),
+                        Number(op.turns) * 360,
+                    ),
+                    "спираль",
+                );
+                const node = new PipeNode({
+                    document: this.doc,
+                    radius: Math.max(0.2, Number(op.thickness) / 2),
+                    path: wire,
+                });
+                node.name = "Спираль";
+                return this.addNode(stepNo, node);
             }
             case "именовать": {
                 const target = this.anyNode(op.node);
