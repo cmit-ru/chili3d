@@ -298,7 +298,10 @@ export class AiOps {
      * («взять_из_сцены» видела одно дерево, work() — другое).
      */
     private flatNodes(): INode[] {
-        const out: INode[] = [];
+        // Сериализация пишет корневую папку работы как nodes[0] — поэтому №1
+        // здесь сам rootNode, а его дети идут дальше в порядке обхода.
+        const root = this.doc.modelManager.rootNode as unknown as INode;
+        const out: INode[] = [root];
         const walk = (node: INode | undefined) => {
             let current = node;
             while (current) {
@@ -668,7 +671,7 @@ export class AiOps {
             }
             case "удалить": {
                 const target = this.anyNode(op.node);
-                if (target instanceof FolderNode) {
+                if (target instanceof FolderNode || target === (this.doc.modelManager.rootNode as unknown)) {
                     throw new Error("папку работы удалять нельзя — удаляйте фигуры по одной");
                 }
                 target.parent?.remove(target);
