@@ -46,11 +46,12 @@ import {
     Transaction,
     XYZ,
 } from "@chili3d/core";
+import { sceneVolumeMm3 } from "./volume";
 
 /** Версия словаря операций. Пакет другой версии не исполняется (tz-ai.md §5). */
 const DICT_VERSION = 3;
 
-const IDLE_MS = 5_000;
+const IDLE_MS = 2_000;
 const ACTIVE_MS = 1_000;
 
 /** Шаг словаря: имена операций русские, параметры — латиницей (данные оболочки). */
@@ -99,6 +100,7 @@ interface OpsBatch {
     id: number;
     dict_version: number;
     status: string;
+    pause_ms?: number;
     steps: OpsStep[];
 }
 
@@ -209,9 +211,10 @@ export class AiOps {
             batch: OpsBatch | null;
             role?: string;
             snapshot_wanted?: boolean;
+            snapshot_view?: string;
         };
         // Свежий снимок по запросу помощника — вне зависимости от пакетов.
-        if (data.snapshot_wanted) void this.sendSnapshot();
+        if (data.snapshot_wanted) void this.sendSnapshot(data.snapshot_view);
 
         if (!data.batch) {
             if (this.wasActive) {
@@ -240,49 +243,137 @@ export class AiOps {
             return ACTIVE_MS;
         }
 
-        const step = batch.steps.find((s) => !s.applied);
-        if (!step) return IDLE_MS;
-
-        this.show(
-            `Сейчас строит помощник: шаг ${step.step_no} из ${batch.steps.length}. Пожалуйста, ничего не нажимайте.`,
-        );
-        try {
-            this.apply(step.step_no, step.op);
-            const done = await this.report(batch.id, step.step_no, true);
-            if (done) {
+        const pause = Math.max(0, Math.min(2_000, Number(batch.pause_ms ?? ACTIVE_MS)));
+        // Темп задаёт помощник: 0 — все шаги подряд без пауз (результат сразу),
+        // иначе шаг за тик — построение видно глазами.
+        for (;;) {
+            const step = batch.steps.find((s) => !s.applied);
+            if (!step) return IDLE_MS;
+            this.show(
+                `Сейчас строит помощник: шаг ${step.step_no} из ${batch.steps.length}. Пожалуйста, ничего не нажимайте.`,
+            );
+            try {
+                this.apply(step.step_no, step.op);
+                const done = await this.report(batch.id, step.step_no, true, undefined, this.stepFacts());
+                step.applied = true;
+                if (done) {
+                    this.wasActive = false;
+                    this.showFinal("Помощник закончил построение — работа сохранена.");
+                    this.nodesByStep.clear();
+                    await this.saveNow().catch(() => undefined);
+                    await this.sendSnapshot(); // превью не ждёт минутного троттлинга
+                    return IDLE_MS;
+                }
+                if (pause > 0) return pause;
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                await this.report(batch.id, step.step_no, false, message);
                 this.wasActive = false;
-                this.showFinal("Помощник закончил построение — работа сохранена.");
+                this.showFinal(`Прервано на шаге ${step.step_no}: ${message}`);
                 this.nodesByStep.clear();
-                await this.saveNow().catch(() => undefined);
-                await this.sendSnapshot(); // превью не ждёт минутного троттлинга
                 return IDLE_MS;
             }
-            return ACTIVE_MS;
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            await this.report(batch.id, step.step_no, false, message);
-            this.wasActive = false;
-            this.showFinal(`Прервано на шаге ${step.step_no}: ${message}`);
-            this.nodesByStep.clear();
-            return IDLE_MS;
         }
     }
 
-    private async report(batch: number, step: number, ok: boolean, error?: string) {
+    /** Гео-факты после шага (B-046): агент сверяет числа, а не только картинку. */
+    private stepFacts(): Record<string, unknown> | undefined {
+        try {
+            let bodies = 0;
+            let min: XYZ | undefined;
+            let max: XYZ | undefined;
+            for (const node of this.flatNodes()) {
+                if (!(node instanceof ShapeNode) || !node.shape.isOk) continue;
+                bodies += 1;
+                const world = node.shape.value.transformedMul(node.worldTransform());
+                const box = world.boundingBox();
+                min = min
+                    ? new XYZ({
+                          x: Math.min(min.x, box.min.x),
+                          y: Math.min(min.y, box.min.y),
+                          z: Math.min(min.z, box.min.z),
+                      })
+                    : new XYZ(box.min);
+                max = max
+                    ? new XYZ({
+                          x: Math.max(max.x, box.max.x),
+                          y: Math.max(max.y, box.max.y),
+                          z: Math.max(max.z, box.max.z),
+                      })
+                    : new XYZ(box.max);
+            }
+            const r = (v: number) => Math.round(v * 10) / 10;
+            return {
+                bodies,
+                bbox:
+                    min && max
+                        ? { min: [r(min.x), r(min.y), r(min.z)], max: [r(max.x), r(max.y), r(max.z)] }
+                        : null,
+                volume_mm3: sceneVolumeMm3(this.doc),
+            };
+        } catch {
+            return undefined; // факты не должны ломать построение
+        }
+    }
+
+    private async report(
+        batch: number,
+        step: number,
+        ok: boolean,
+        error?: string,
+        facts?: Record<string, unknown>,
+    ) {
         const response = await fetch(`/api/projects/${this.projectId}/ops-step`, {
             method: "POST",
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ batch, step, ok, error }),
+            body: JSON.stringify({ batch, step, ok, error, facts }),
         });
         if (!response.ok) return false;
         return Boolean(((await response.json()) as { done?: boolean }).done);
     }
 
-    /** Свежий кадр сцены — тем же рендерером, что и обычное превью. */
-    private async sendSnapshot() {
+    /** Направления взгляда для снимков по ракурсам. */
+    private static readonly VIEWS: Record<
+        string,
+        { dir: [number, number, number]; up: [number, number, number] }
+    > = {
+        изометрия: { dir: [1, -1, 1], up: [0, 0, 1] },
+        спереди: { dir: [0, -1, 0], up: [0, 0, 1] },
+        сверху: { dir: [0, 0, 1], up: [0, 1, 0] },
+        сбоку: { dir: [1, 0, 0], up: [0, 0, 1] },
+    };
+
+    /** Свежий кадр сцены — тем же рендерером, что и обычное превью.
+     *  С ракурсом: камера отъезжает на нужную сторону, кадр, камера обратно. */
+    private async sendSnapshot(view?: string) {
         try {
+            const camera = this.app.activeView?.cameraController;
+            const wanted = view ? AiOps.VIEWS[view] : undefined;
+            let saved: { eye: XYZ; target: XYZ; up: XYZ } | undefined;
+            if (camera && wanted) {
+                saved = { eye: camera.cameraPosition, target: camera.cameraTarget, up: camera.cameraUp };
+                const t = camera.cameraTarget;
+                const d = wanted.dir;
+                const len = Math.hypot(d[0], d[1], d[2]);
+                const dist = Math.max(1, saved.eye.sub(t).length());
+                camera.lookAt(
+                    {
+                        x: t.x + (d[0] / len) * dist,
+                        y: t.y + (d[1] / len) * dist,
+                        z: t.z + (d[2] / len) * dist,
+                    },
+                    t,
+                    { x: wanted.up[0], y: wanted.up[1], z: wanted.up[2] },
+                );
+                camera.fitContent();
+                this.doc.visual.update();
+            }
             const image = this.app.activeView?.toImage(320);
+            if (camera && saved) {
+                camera.lookAt(saved.eye, saved.target, saved.up);
+                this.doc.visual.update();
+            }
             if (!image) return;
             await fetch(`/api/projects/${this.projectId}/preview`, {
                 method: "POST",

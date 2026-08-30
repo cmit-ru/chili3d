@@ -91,6 +91,9 @@ class EditBuffer {
 }
 
 export class CloudStorage implements IStorage {
+    /** Провайдер объёма модели (мм³) — ставится редактором при открытии работы. */
+    volumeProvider?: () => number | null;
+
     private revisions = new Map<string, number>();
     private buffer = new EditBuffer();
     private listeners: StateListener[] = [];
@@ -161,6 +164,9 @@ export class CloudStorage implements IStorage {
         if (!projectId) return false;
 
         const rev = this.revisions.get(projectId) ?? 0;
+        // Объём модели спрашиваем у редактора в момент сохранения (B-045):
+        // хранилище само документа не знает, поэтому провайдер ставит web/index.
+        const volumeMm3 = this.volumeProvider?.() ?? null;
         this.emit("saving");
         await this.buffer.put(this.bufferKey(projectId), value, rev, this.owner);
 
@@ -170,7 +176,7 @@ export class CloudStorage implements IStorage {
                 method: "POST",
                 credentials: "same-origin",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ rev, body: value }),
+                body: JSON.stringify({ rev, body: value, volumeMm3 }),
             });
         } catch {
             // Сеть пропала: правки в буфере, работу можно продолжать.

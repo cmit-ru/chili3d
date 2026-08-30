@@ -25,6 +25,7 @@ import { ScreenLock } from "./screenLock";
 import { SourceNotice } from "./sourceNotice";
 import { UserBadge } from "./userBadge";
 import { ViewBanner } from "./viewBanner";
+import { sceneVolumeMm3 } from "./volume";
 
 const loading = new Loading();
 document.body.appendChild(loading);
@@ -171,6 +172,11 @@ async function openProject(app: IApplication, autoSave: AutoSave) {
             );
         });
     }
+    // Объём модели уезжает с каждым сохранением (B-045): нужен разбору
+    // помощника, проверкам карточек и 3D-печати.
+    const storage = app.storage as unknown as CloudStorage;
+    if (storage) storage.volumeProvider = () => sceneVolumeMm3(doc);
+
     // Исполнитель пакетов построения ИИ-помощника (фаза Б): модель собирается
     // на глазах у того, кто открыл работу. Строит только вкладка с правом
     // записи; в просмотре виден лишь прогресс.
