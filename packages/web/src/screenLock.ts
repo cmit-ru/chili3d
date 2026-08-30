@@ -5,12 +5,16 @@
 //
 // Урок кончился, ребёнок ушёл, не нажав «выйти» — следующий садится за чужую
 // открытую работу. Замок закрывает экран и честно говорит, чей это компьютер.
-// Базовый замок информационный: он показывает владельца и даёт выйти; PIN как
-// проверка появится вместе с настройкой группы (этап 1.1b).
+// Замок информационный: показывает владельца и даёт выйти (защита — «Выйти»,
+// PIN спрашивается при входе, не здесь). Через autoExitMinutes в замке —
+// автовыход к «Кто ты?», но только когда всё дослано в облако: автовыход
+// не имеет права стоить ребёнку работы (ТЗ §4).
 
 export interface LockOptions {
     /** Через сколько минут бездействия закрывать экран. */
     minutes: number;
+    /** Через сколько минут В ЗАМКЕ выходить к «Кто ты?» (0 — не выходить). */
+    autoExitMinutes?: number;
     userName: string;
     userAvatar: string;
     /** Есть ли несохранённые правки — тогда честно предупреждаем. */
@@ -43,6 +47,19 @@ export class ScreenLock {
         // ребёнку работы, даже если он уже ушёл из класса.
         await this.options.flush().catch(() => undefined);
         const unsaved = this.options.hasUnsaved();
+
+        // Общий компьютер: постоял в замке — выходим к «Кто ты?», чтобы
+        // следующий ребёнок не работал под чужим именем. Перед выходом ещё раз
+        // досылаем буфер; если не долетело (нет сети) — остаёмся в замке.
+        if (this.options.autoExitMinutes) {
+            window.setTimeout(async () => {
+                if (!this.overlay) return; // уже разблокировали
+                await this.options.flush().catch(() => undefined);
+                if (!this.options.hasUnsaved()) {
+                    window.location.href = "/logout-form";
+                }
+            }, this.options.autoExitMinutes * 60_000);
+        }
 
         const overlay = document.createElement("div");
         overlay.style.cssText = `
@@ -86,8 +103,7 @@ export class ScreenLock {
         `;
         leave.onclick = (event) => {
             event.preventDefault();
-            // Выход живёт в оболочке: редактор открыт рамкой внутри её страницы.
-            window.parent.location.href = "/logout-form";
+            window.location.href = "/logout-form";
         };
 
         buttons.append(resume, leave);

@@ -51,6 +51,18 @@ export class UserBadge {
         works.textContent = "Мои работы";
         works.style.cssText = "color:#0e7a5f;text-decoration:none;font-weight:600";
 
+        // «Передать компьютер» — для ребёнка, который уступает место соседу:
+        // работа сохранится, компьютер вернётся к «Кто ты?» (ТЗ §4). Рядом
+        // остаётся «Это не я» — для того, кто увидел чужое имя.
+        const handover = document.createElement("a");
+        handover.href = "/logout-form";
+        handover.textContent = "Передать компьютер";
+        handover.title = "Работа сохранится, компьютер вернётся к экрану «Кто ты?»";
+        handover.style.cssText = `
+            color: #4a625b; text-decoration: none; border: 1px solid var(--border-color, #c7d3ce);
+            border-radius: 4px; padding: 5px 9px;
+        `;
+
         const leave = document.createElement("a");
         leave.href = "/logout-form";
         leave.textContent = this.options.role === "student" ? "Это не я" : "Выйти";
@@ -59,7 +71,9 @@ export class UserBadge {
             border-radius: 4px; padding: 5px 9px;
         `;
 
-        root.append(avatar, name, works, leave);
+        root.append(avatar, name, works);
+        if (this.options.role === "student") root.append(handover);
+        root.append(leave);
         document.body.appendChild(root);
     }
 }

@@ -147,6 +147,9 @@ async function openProject(app: IApplication, autoSave: AutoSave) {
     if (meta?.user && meta.user.role === "student") {
         new ScreenLock({
             minutes: meta.lockMinutes ?? 10,
+            // Ещё столько же в замке — и автовыход к «Кто ты?» (ТЗ §4:
+            // профиль «общий компьютер класса»).
+            autoExitMinutes: meta.lockMinutes ?? 10,
             userName: meta.user.name,
             userAvatar: meta.user.avatar,
             hasUnsaved: () => autoSave.hasPending(),
