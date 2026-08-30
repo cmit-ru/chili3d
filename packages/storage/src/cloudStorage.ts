@@ -32,6 +32,15 @@ const BUFFER_STORE = "edits";
  *
  * Форма `?project=6` остаётся для локальной разработки без nginx.
  */
+/**
+ * Песочница с лендинга (`/3d/?sandbox=1`): редактор без входа и без работы.
+ * Модель-образец грузится из статики, сохранение честно отключено —
+ * следующий посетитель всегда видит нетронутый образец.
+ */
+export function sandboxFromLocation(): boolean {
+    return new URLSearchParams(window.location.search).get("sandbox") === "1";
+}
+
 export function projectIdFromLocation(): string | null {
     const fromQuery = new URLSearchParams(window.location.search).get("project");
     if (fromQuery && /^\d+$/.test(fromQuery)) return fromQuery;
@@ -94,6 +103,9 @@ export class CloudStorage implements IStorage {
     /** Провайдер объёма модели (мм³) — ставится редактором при открытии работы. */
     volumeProvider?: () => number | null;
 
+    /** Песочница: дёргается при попытке сохранить — редактор подсвечивает баннер. */
+    onSandboxSave?: () => void;
+
     private revisions = new Map<string, number>();
     private buffer = new EditBuffer();
     private listeners: StateListener[] = [];
@@ -131,6 +143,10 @@ export class CloudStorage implements IStorage {
 
     async get(_database: string, table: string, _id: string): Promise<any> {
         if (table !== "documents") return undefined;
+        if (sandboxFromLocation()) {
+            const response = await fetch("/try-seed.json");
+            return response.ok ? await response.json() : undefined;
+        }
         // Адрес работы берём ТОЛЬКО из URL: ядро подставляет сюда свой
         // внутренний id документа, и сохранение уходило по нему на сервер
         // (POST /api/projects/mnz21j4…/save → 500), то есть в никуда.
@@ -153,6 +169,12 @@ export class CloudStorage implements IStorage {
     }
 
     async put(_database: string, table: string, _id: string, value: any): Promise<boolean> {
+        if (sandboxFromLocation()) {
+            // Ничего не пишем — ни на сервер, ни в буфер. Ответ «успех», чтобы
+            // ядро не показывало ошибку: про несохранение говорит баннер.
+            if (table === "documents") this.onSandboxSave?.();
+            return true;
+        }
         // Список недавних документов не храним — лента работ живёт в кабинете.
         // Но именно с ним ядро отдаёт свежий снимок сцены: забираем его на превью.
         if (table !== "documents") {

@@ -13,7 +13,7 @@
 
 import { AppBuilder } from "@chili3d/builder";
 import type { IApplication } from "@chili3d/core";
-import { type CloudStorage, projectIdFromLocation } from "@chili3d/storage";
+import { type CloudStorage, projectIdFromLocation, sandboxFromLocation } from "@chili3d/storage";
 import { SaveIndicator } from "@chili3d/ui";
 import { AiOps } from "./aiOps";
 import { AutoSave } from "./autoSave";
@@ -22,6 +22,7 @@ import { enableEconomyIfNeeded } from "./economy";
 import { FirstHint } from "./firstHint";
 import { type LessonCard, LessonPanel } from "./lessonPanel";
 import { Loading } from "./loading";
+import { SandboxNotice } from "./sandboxNotice";
 import { ScreenLock } from "./screenLock";
 import { SourceNotice } from "./sourceNotice";
 import { UserBadge } from "./userBadge";
@@ -93,9 +94,26 @@ async function fetchMeta(id: string): Promise<ProjectMeta | null> {
     }
 }
 
+/**
+ * Песочница с лендинга (без входа): открывается модель-образец, сохранение
+ * отключено хранилищем, баннер зовёт зарегистрироваться. Ни автосейва, ни
+ * бейджа, ни замка — сессии нет, терять нечего.
+ */
+async function openSandbox(app: IApplication) {
+    let doc = await app.openDocument("sandbox").catch(() => undefined);
+    if (!doc) doc = await app.newDocument("Моя модель");
+
+    const notice = new SandboxNotice();
+    const storage = app.storage as unknown as CloudStorage;
+    if (storage) storage.onSandboxSave = () => notice.nudge();
+}
+
 async function openProject(app: IApplication, autoSave: AutoSave, earlyMeta: ProjectMeta | null) {
     const id = projectId();
-    if (!id) return;
+    if (!id) {
+        if (sandboxFromLocation()) await openSandbox(app);
+        return;
+    }
 
     const meta = earlyMeta ?? (await fetchMeta(id));
 
