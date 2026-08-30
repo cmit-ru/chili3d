@@ -101,6 +101,7 @@ interface OpsBatch {
     dict_version: number;
     status: string;
     pause_ms?: number;
+    demo?: boolean;
     steps: OpsStep[];
 }
 
@@ -111,6 +112,31 @@ const axisVector = (axis: unknown): XYZ => (axis === "x" ? XYZ.unitX : axis === 
 const planeAt = (origin: XYZ) => new Plane({ origin, normal: XYZ.unitZ, xvec: XYZ.unitX });
 
 const degToRad = (deg: number) => (deg * Math.PI) / 180;
+
+/** Кнопка ленты для каждой операции — цель виртуального курсора в демо-режиме. */
+const OP_COMMANDS: Record<string, string> = {
+    брусок: "create.box",
+    цилиндр: "create.cylinder",
+    шар: "create.sphere",
+    конус: "create.cone",
+    полигон: "create.regularPolygon",
+    контур: "create.polygon",
+    выдавить: "create.extrude",
+    повернуть_вокруг_оси: "create.revol",
+    скруглить: "modify.fillet",
+    фаска: "modify.chamfer",
+    полость: "modify.shell",
+    объединить: "boolean.join",
+    вычесть: "boolean.cut",
+    пересечь: "boolean.common",
+    передвинуть: "modify.move",
+    повернуть: "modify.rotate",
+    зеркало: "modify.mirror",
+    размножить_по_кругу: "modify.array",
+    размножить_сеткой: "modify.array",
+    покрасить: "modify.paintBucket",
+    удалить: "modify.deleteNode",
+};
 
 /** Поля, которые можно менять операцией «изменить» — сеттеры параметрических узлов. */
 const EDITABLE_FIELDS = new Set(["dx", "dy", "dz", "radius", "sides", "length", "angle"]);
@@ -123,6 +149,7 @@ export class AiOps {
     private readonly statusLine: HTMLDivElement;
     private readonly stopButton: HTMLButtonElement;
     private hideTimer: number | undefined;
+    private cursor: HTMLDivElement | undefined;
 
     constructor(
         private readonly app: IApplication,
@@ -212,9 +239,10 @@ export class AiOps {
             role?: string;
             snapshot_wanted?: boolean;
             snapshot_view?: string;
+            snapshot_edges_of?: number;
         };
         // Свежий снимок по запросу помощника — вне зависимости от пакетов.
-        if (data.snapshot_wanted) void this.sendSnapshot(data.snapshot_view);
+        if (data.snapshot_wanted) void this.sendSnapshot(data.snapshot_view, data.snapshot_edges_of);
 
         if (!data.batch) {
             if (this.wasActive) {
@@ -253,6 +281,7 @@ export class AiOps {
                 `Сейчас строит помощник: шаг ${step.step_no} из ${batch.steps.length}. Пожалуйста, ничего не нажимайте.`,
             );
             try {
+                if (batch.demo) await this.demoPoint(step.op);
                 this.apply(step.step_no, step.op);
                 const done = await this.report(batch.id, step.step_no, true, undefined, this.stepFacts());
                 step.applied = true;
@@ -333,6 +362,86 @@ export class AiOps {
         return Boolean(((await response.json()) as { done?: boolean }).done);
     }
 
+    /** Демо-режим (B-048): виртуальный курсор подъезжает к настоящей кнопке
+     *  ленты и «нажимает» её — как в видеоуроке, только вживую. */
+    private async demoPoint(op: OpData) {
+        const key = OP_COMMANDS[String(op.op)];
+        const button = key ? (document.querySelector(`[data-command="${key}"]`) as HTMLElement | null) : null;
+        if (!button || !button.offsetParent) return; // кнопки нет или она скрыта
+        if (!this.cursor) {
+            this.cursor = document.createElement("div");
+            this.cursor.style.cssText =
+                "position:fixed;left:0;top:0;z-index:70;width:26px;height:26px;pointer-events:none;" +
+                "transition:transform .7s cubic-bezier(.4,0,.2,1);will-change:transform;" +
+                "filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))";
+            this.cursor.innerHTML =
+                '<svg viewBox="0 0 24 24" width="26" height="26">' +
+                '<path d="M4 2 L20 12 L12 13.5 L9 21 Z" fill="#fff" stroke="#1f2430" stroke-width="1.6"/></svg>';
+            this.cursor.style.transform = `translate(${window.innerWidth / 2}px, ${window.innerHeight / 2}px)`;
+            document.body.appendChild(this.cursor);
+        }
+        const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
+        const rect = button.getBoundingClientRect();
+        this.cursor.style.display = "block";
+        this.cursor.style.transform = `translate(${rect.left + rect.width / 2 - 4}px, ${rect.top + rect.height / 2 - 2}px)`;
+        await sleep(750);
+        const savedOutline = button.style.outline;
+        button.style.outline = "3px solid #ff8800";
+        await sleep(400);
+        button.style.outline = savedOutline;
+        // курсор «уносит» операцию в сцену
+        this.cursor.style.transform = `translate(${window.innerWidth / 2}px, ${window.innerHeight / 2}px)`;
+        await sleep(400);
+    }
+
+    /** Кадр с пронумерованными рёбрами узла (B-049): агент выбирает edges глазами. */
+    private async edgeLabeledImage(base: string, edgesOf: number): Promise<string> {
+        const node = this.flatNodes()[edgesOf - 1];
+        if (!(node instanceof ShapeNode) || !node.shape.isOk) return base;
+        const world = node.shape.value.transformedMul(node.worldTransform());
+        const edges = world.findSubShapes(ShapeTypes.edge).slice(0, 40);
+        const view = this.app.activeView;
+        if (!view) return base;
+        const scale = 320 / Math.max(view.width ?? 320, view.height ?? 320, 1);
+        const points = edges.map((edge, i) => {
+            const b = edge.boundingBox();
+            const mid = new XYZ({
+                x: (b.min.x + b.max.x) / 2,
+                y: (b.min.y + b.max.y) / 2,
+                z: (b.min.z + b.max.z) / 2,
+            });
+            const xy = view.worldToScreen(mid);
+            return { n: i + 1, x: xy.x * scale, y: xy.y * scale };
+        });
+        return await new Promise<string>((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement("canvas");
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext("2d");
+                if (!ctx) return resolve(base);
+                ctx.drawImage(img, 0, 0);
+                ctx.font = "bold 11px system-ui";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                for (const p of points) {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+                    ctx.fillStyle = "rgba(255,255,255,.92)";
+                    ctx.fill();
+                    ctx.strokeStyle = "#1f2430";
+                    ctx.stroke();
+                    ctx.fillStyle = "#1f2430";
+                    ctx.fillText(String(p.n), p.x, p.y + 0.5);
+                }
+                resolve(canvas.toDataURL("image/jpeg", 0.8));
+            };
+            img.onerror = () => resolve(base);
+            img.src = base;
+        });
+    }
+
     /** Направления взгляда для снимков по ракурсам. */
     private static readonly VIEWS: Record<
         string,
@@ -346,7 +455,7 @@ export class AiOps {
 
     /** Свежий кадр сцены — тем же рендерером, что и обычное превью.
      *  С ракурсом: камера отъезжает на нужную сторону, кадр, камера обратно. */
-    private async sendSnapshot(view?: string) {
+    private async sendSnapshot(view?: string, edgesOf?: number) {
         try {
             const camera = this.app.activeView?.cameraController;
             const wanted = view ? AiOps.VIEWS[view] : undefined;
@@ -369,7 +478,10 @@ export class AiOps {
                 camera.fitContent();
                 this.doc.visual.update();
             }
-            const image = this.app.activeView?.toImage(320);
+            let image = this.app.activeView?.toImage(320);
+            if (image && edgesOf) {
+                image = await this.edgeLabeledImage(image, Number(edgesOf));
+            }
             if (camera && saved) {
                 camera.lookAt(saved.eye, saved.target, saved.up);
                 this.doc.visual.update();

@@ -34,6 +34,9 @@ export class RibbonPushButton extends HTMLElement {
         display?: I18nKeys,
     ) {
         super();
+        // Якорь для демо-режима помощника: виртуальный курсор находит кнопку
+        // операции по этому атрибуту («Макетка», B-048).
+        this.setAttribute("data-command", commandName);
         this.initHTML(display ?? `command.${commandName}`, icon, size);
         this.addEventListener("click", onClick);
     }
