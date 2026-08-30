@@ -129,7 +129,8 @@ export function meshesToStl(meshes: StlMesh[], options?: StlExportOptions): Uint
     if (binary) {
         return writeBinary(meshes, triangleCount(meshes));
     }
-    return writeAscii(meshes, options?.name ?? "chili3d");
+    // Имя в шапке STL видит тот, кто откроет файл в слайсере для печати.
+    return writeAscii(meshes, options?.name ?? "maketka");
 }
 
 /**

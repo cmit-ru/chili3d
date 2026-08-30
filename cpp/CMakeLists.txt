@@ -82,6 +82,12 @@ if (${EMSCRIPTEN})
         $<IF:$<CONFIG:Release>,-Oz,-O0>
         $<IF:$<CONFIG:Release>,-flto,-fno-lto>
         -sDISABLE_EXCEPTION_CATCHING=0
+        # Форк «Макетки»: без eval и new Function в склейке emscripten.
+        # Это позволяет включить строгую политику безопасности содержимого без
+        # unsafe-eval — требование фазы подготовки к реестру (ТЗ §9, 1.1r) и
+        # заодно инвариант INV-006: на странице ребёнка не должно быть ни одного
+        # механизма исполнения кода из данных.
+        -sDYNAMIC_EXECUTION=0
         -sMODULARIZE=1
         -sEXPORT_ES6=1
         -sSTACK_SIZE=16MB
