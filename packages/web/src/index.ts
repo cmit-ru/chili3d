@@ -15,6 +15,7 @@ import { AppBuilder } from "@chili3d/builder";
 import type { IApplication } from "@chili3d/core";
 import { type CloudStorage, projectIdFromLocation } from "@chili3d/storage";
 import { SaveIndicator } from "@chili3d/ui";
+import { AiOps } from "./aiOps";
 import { AutoSave } from "./autoSave";
 import { CoreGuard } from "./coreGuard";
 import { FirstHint } from "./firstHint";
@@ -110,15 +111,28 @@ async function openProject(app: IApplication, autoSave: AutoSave) {
 
     // Чужая работа открывается в просмотре: автосохранение включается только
     // после явного «Править» — случайная перезапись детской работы невозможна.
+    let editingEnabled = !meta?.viewingOthers;
     const startSaving = () => {
         autoSave.watch(doc);
         autoSave.attachUnloadGuard(doc);
     };
+    // «Передана на правку» — серверная отметка для помощника (tz-ai.md §5):
+    // ставится кнопкой «Править», живёт 30 минут, продлевается активностью вкладки.
+    const sendGrant = () =>
+        void fetch(`/api/projects/${id}/grant`, {
+            method: "POST",
+            credentials: "same-origin",
+        }).catch(() => undefined);
     if (meta?.viewingOthers) {
         new ViewBanner({
             ownerName: meta.ownerName || "ученик",
             canEdit: !meta.readOnly,
-            onEdit: startSaving,
+            onEdit: () => {
+                editingEnabled = true;
+                startSaving();
+                sendGrant();
+                window.setInterval(sendGrant, 5 * 60_000);
+            },
             onCopy: async () => {
                 try {
                     const response = await fetch(`/api/projects/${id}/copy`, {
@@ -157,6 +171,18 @@ async function openProject(app: IApplication, autoSave: AutoSave) {
             );
         });
     }
+    // Исполнитель пакетов построения ИИ-помощника (фаза Б): модель собирается
+    // на глазах у того, кто открыл работу. Строит только вкладка с правом
+    // записи; в просмотре виден лишь прогресс.
+    if (!meta?.readOnly) {
+        new AiOps(
+            doc,
+            id,
+            () => editingEnabled,
+            () => autoSave.saveNow(doc),
+        );
+    }
+
     // Страховка от падения ядра: сохраняем перед рискованной операцией и
     // честно объясняем ребёнку, если геометрия всё-таки не получилась.
     new CoreGuard(
