@@ -266,9 +266,12 @@ export class AiOps {
             snapshot_wanted?: boolean;
             snapshot_view?: string;
             snapshot_edges_of?: number;
+            snapshot_size?: number;
         };
         // Свежий снимок по запросу помощника — вне зависимости от пакетов.
-        if (data.snapshot_wanted) void this.sendSnapshot(data.snapshot_view, data.snapshot_edges_of);
+        if (data.snapshot_wanted) {
+            void this.sendSnapshot(data.snapshot_view, data.snapshot_edges_of, data.snapshot_size);
+        }
 
         if (!data.batch) {
             if (this.wasActive) {
@@ -501,7 +504,8 @@ export class AiOps {
 
     /** Свежий кадр сцены — тем же рендерером, что и обычное превью.
      *  С ракурсом: камера отъезжает на нужную сторону, кадр, камера обратно. */
-    private async sendSnapshot(view?: string, edgesOf?: number) {
+    private async sendSnapshot(view?: string, edgesOf?: number, size?: number) {
+        const px = Math.max(320, Math.min(1600, Number(size) || 320));
         try {
             const camera = this.app.activeView?.cameraController;
             const wanted = view ? AiOps.VIEWS[view] : undefined;
@@ -524,7 +528,7 @@ export class AiOps {
                 camera.fitContent();
                 this.doc.visual.update();
             }
-            let image = this.app.activeView?.toImage(320);
+            let image = this.app.activeView?.toImage(px);
             if (image && edgesOf) {
                 image = await this.edgeLabeledImage(image, Number(edgesOf));
             }
