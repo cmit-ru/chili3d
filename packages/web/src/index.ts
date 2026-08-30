@@ -18,6 +18,7 @@ import { SaveIndicator } from "@chili3d/ui";
 import { AiOps } from "./aiOps";
 import { AutoSave } from "./autoSave";
 import { CoreGuard } from "./coreGuard";
+import { enableEconomyIfNeeded } from "./economy";
 import { FirstHint } from "./firstHint";
 import { type LessonCard, LessonPanel } from "./lessonPanel";
 import { Loading } from "./loading";
@@ -77,6 +78,7 @@ interface ProjectMeta {
     readOnly?: boolean;
     showHint?: boolean;
     sharedPc?: boolean;
+    economyMode?: boolean;
     viewingOthers?: boolean;
     ownerName?: string;
 }
@@ -91,11 +93,11 @@ async function fetchMeta(id: string): Promise<ProjectMeta | null> {
     }
 }
 
-async function openProject(app: IApplication, autoSave: AutoSave) {
+async function openProject(app: IApplication, autoSave: AutoSave, earlyMeta: ProjectMeta | null) {
     const id = projectId();
     if (!id) return;
 
-    const meta = await fetchMeta(id);
+    const meta = earlyMeta ?? (await fetchMeta(id));
 
     // Работа могла быть ещё не начата (в облаке пусто) или сохранена другой
     // версией формата — тогда открывать нечего, начинаем с чистой сцены.
@@ -223,12 +225,12 @@ async function openProject(app: IApplication, autoSave: AutoSave) {
     }
 }
 
-async function handleApplicaionBuilt(app: IApplication) {
+async function handleApplicaionBuilt(app: IApplication, earlyMeta: ProjectMeta | null) {
     const autoSave = new AutoSave(app);
     attachSaveIndicator(app, autoSave);
 
     try {
-        await openProject(app, autoSave);
+        await openProject(app, autoSave, earlyMeta);
     } catch (error) {
         console.warn("[project]", error);
     }
@@ -237,14 +239,26 @@ async function handleApplicaionBuilt(app: IApplication) {
     loading.remove();
 }
 
+// Мета грузится ДО сборки приложения: флаг «общие компьютеры класса» должен
+// успеть включить экономный режим до создания рендерера и мешеров (B-052).
+// Лишние ~100 мс на старте несравнимы с загрузкой wasm-ядра.
+const earlyMeta: Promise<ProjectMeta | null> = (async () => {
+    const id = projectId();
+    const meta = id ? await fetchMeta(id) : null;
+    enableEconomyIfNeeded(Boolean(meta?.economyMode));
+    return meta;
+})();
+
 // prettier-ignore
-new AppBuilder()
-    .useCloudStorage()
-    .useWasmOcc()
-    .useThree()
-    .useUI()
-    .build()
-    .then(handleApplicaionBuilt)
+earlyMeta
+    .then((meta) =>
+        new AppBuilder()
+            .useCloudStorage()
+            .useWasmOcc()
+            .useThree()
+            .useUI()
+            .build()
+            .then((app) => handleApplicaionBuilt(app, meta)))
     .catch((err) => {
         // Экран «не загрузилось» с понятным текстом вместо системного alert
         loading.showError(err?.message ?? String(err));

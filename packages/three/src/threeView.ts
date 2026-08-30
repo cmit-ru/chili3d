@@ -167,11 +167,14 @@ export class ThreeView extends Observable implements IView {
     }
 
     protected initRenderer() {
+        // Экономный режим «Макетки» (B-052): без сглаживания и с pixel ratio
+        // не выше 1 — классным машинам кратно легче, картинка почти та же.
+        const economy = Boolean((globalThis as { __maketkaEconomy?: boolean }).__maketkaEconomy);
         const renderer = new WebGLRenderer({
-            antialias: true,
+            antialias: !economy,
             alpha: true,
         });
-        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setPixelRatio(economy ? Math.min(window.devicePixelRatio, 1) : window.devicePixelRatio);
 
         return renderer;
     }
