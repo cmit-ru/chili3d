@@ -136,8 +136,11 @@ export class AiOps {
             "position:absolute;top:14px;left:50%;transform:translateX(-50%);display:flex;" +
             "align-items:center;gap:14px;background:#1f2430;color:#fff;padding:12px 18px;" +
             "border-radius:10px;font:14px/1.5 system-ui,sans-serif;" +
-            "box-shadow:0 6px 24px rgba(0,0,0,.4);max-width:min(92vw,560px)";
+            "box-shadow:0 6px 24px rgba(0,0,0,.4);max-width:min(92vw,560px);border:1px solid #5a6272";
         this.statusLine = document.createElement("div");
+        // Цвет и шрифт — прямо на элементе: темы редактора перебивают
+        // унаследованные от контейнера значения (тёмный текст на тёмном фоне).
+        this.statusLine.style.cssText = "color:#fff;font:14px/1.5 system-ui,sans-serif";
         this.stopButton = document.createElement("button");
         this.stopButton.textContent = "Остановить";
         this.stopButton.style.cssText =
