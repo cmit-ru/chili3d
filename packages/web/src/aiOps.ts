@@ -47,7 +47,7 @@ import {
     Transaction,
     XYZ,
 } from "@chili3d/core";
-import { sceneVolumeMm3 } from "./volume";
+import { nodeWorldAabb, sceneVolumeMm3 } from "./volume";
 
 /** Версия словаря операций. Пакет другой версии не исполняется (tz-ai.md §5). */
 const DICT_VERSION = 4;
@@ -309,7 +309,16 @@ export class AiOps {
             try {
                 if (batch.demo) await this.demoPoint(step.op);
                 this.apply(step.step_no, step.op);
-                const done = await this.report(batch.id, step.step_no, true, undefined, this.stepFacts());
+                // Факты дороги на больших сценах — считаем только на последнем
+                // шаге пакета (агенту нужен итог), B-051.
+                const isLast = batch.steps.filter((st) => !st.applied).length === 1;
+                const done = await this.report(
+                    batch.id,
+                    step.step_no,
+                    true,
+                    undefined,
+                    isLast ? this.stepFacts() : undefined,
+                );
                 step.applied = true;
                 if (done) {
                     this.wasActive = false;
@@ -320,6 +329,9 @@ export class AiOps {
                     return IDLE_MS;
                 }
                 if (pause > 0) return pause;
+                // pause=0: отдать браузеру кадр между шагами — построение
+                // остаётся быстрым, но UI дышит (B-051).
+                await new Promise((r) => requestAnimationFrame(() => r(undefined)));
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 await this.report(batch.id, step.step_no, false, message);
@@ -340,8 +352,10 @@ export class AiOps {
             for (const node of this.flatNodes()) {
                 if (!(node instanceof ShapeNode) || !node.shape.isOk) continue;
                 bodies += 1;
-                const world = node.shape.value.transformedMul(node.worldTransform());
-                const box = world.boundingBox();
+                // B-051: бокс без копии геометрии — прежний transformedMul
+                // создавал полную wasm-форму на каждое тело каждого шага и тёк.
+                const box = nodeWorldAabb(node);
+                if (!box) continue;
                 min = min
                     ? new XYZ({
                           x: Math.min(min.x, box.min.x),
@@ -424,10 +438,15 @@ export class AiOps {
     private async edgeLabeledImage(base: string, edgesOf: number): Promise<string> {
         const node = this.flatNodes()[edgesOf - 1];
         if (!(node instanceof ShapeNode) || !node.shape.isOk) return base;
+        // Мировая копия формы нужна для координат рёбер — освобождаем её
+        // после сбора точек, иначе течёт wasm-куча (B-051).
         const world = node.shape.value.transformedMul(node.worldTransform());
         const edges = world.findSubShapes(ShapeTypes.edge).slice(0, 40);
         const view = this.app.activeView;
-        if (!view) return base;
+        if (!view) {
+            world.dispose();
+            return base;
+        }
         const scale = 320 / Math.max(view.width ?? 320, view.height ?? 320, 1);
         const points = edges.map((edge, i) => {
             const b = edge.boundingBox();
@@ -439,6 +458,7 @@ export class AiOps {
             const xy = view.worldToScreen(mid);
             return { n: i + 1, x: xy.x * scale, y: xy.y * scale };
         });
+        world.dispose();
         return await new Promise<string>((resolve) => {
             const img = new Image();
             img.onload = () => {
