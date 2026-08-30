@@ -40,7 +40,7 @@ import {
 } from "@chili3d/core";
 
 /** Версия словаря операций. Пакет другой версии не исполняется (tz-ai.md §5). */
-const DICT_VERSION = 1;
+const DICT_VERSION = 2;
 
 const IDLE_MS = 5_000;
 const ACTIVE_MS = 1_000;
@@ -68,6 +68,10 @@ interface OpData {
     axis?: string;
     angle?: number;
     name?: string;
+    cx?: number;
+    cy?: number;
+    cz?: number;
+    index?: number;
 }
 
 interface OpsStep {
@@ -202,12 +206,34 @@ export class AiOps {
 
     /* ------------------------- исполнение операций ------------------------- */
 
-    private node(ref: unknown): ShapeNode {
+    private anyNode(ref: unknown): INode {
         const found = this.nodesByStep.get(Number(ref));
-        if (!found || !(found instanceof ShapeNode)) {
+        if (!found) {
             throw new Error(`узел шага ${ref} не найден (вкладка перезагружалась?)`);
         }
         return found;
+    }
+
+    private node(ref: unknown): ShapeNode {
+        const found = this.anyNode(ref);
+        if (!(found instanceof ShapeNode)) {
+            throw new Error(`узел шага ${ref} — не фигура`);
+        }
+        return found;
+    }
+
+    /** Центр поворота по умолчанию — центр фигуры в мировых координатах (v2). */
+    private rotationCenter(target: ShapeNode, op: OpData): XYZ {
+        if (op.cx !== undefined || op.cy !== undefined || op.cz !== undefined) {
+            return new XYZ({ x: Number(op.cx ?? 0), y: Number(op.cy ?? 0), z: Number(op.cz ?? 0) });
+        }
+        const box = this.shapeOf(target).boundingBox();
+        const local = new XYZ({
+            x: (box.min.x + box.max.x) / 2,
+            y: (box.min.y + box.max.y) / 2,
+            z: (box.min.z + box.max.z) / 2,
+        });
+        return target.transform.ofPoint(local);
     }
 
     private shapeOf(node: ShapeNode): IShape {
@@ -376,8 +402,9 @@ export class AiOps {
             }
             case "повернуть": {
                 const target = this.node(op.node);
+                const center = this.rotationCenter(target, op);
                 target.transform = target.transform.multiply(
-                    Matrix4.fromAxisRad(XYZ.zero, axisVector(op.axis), degToRad(Number(op.angle))),
+                    Matrix4.fromAxisRad(center, axisVector(op.axis), degToRad(Number(op.angle))),
                 );
                 this.nodesByStep.set(stepNo, target);
                 return;
@@ -416,6 +443,29 @@ export class AiOps {
                 const target = this.node(op.node);
                 target.name = String(op.name).slice(0, 60);
                 this.nodesByStep.set(stepNo, target);
+                return;
+            }
+            case "удалить": {
+                const target = this.anyNode(op.node);
+                target.parent?.remove(target);
+                for (const [key, value] of this.nodesByStep) {
+                    if (value === target) this.nodesByStep.delete(key);
+                }
+                return;
+            }
+            case "взять_из_сцены": {
+                // Доступ к узлам, созданным вне пакета (v2): без него помощник
+                // не мог исправить собственную ошибку. Номер — по порядку в
+                // корне дерева работы, 1-based.
+                let child = this.doc.modelManager.rootNode.firstChild;
+                let n = 1;
+                const want = Number(op.index);
+                while (child && n < want) {
+                    child = child.nextSibling;
+                    n += 1;
+                }
+                if (!child) throw new Error(`в сцене нет узла №${want}`);
+                this.nodesByStep.set(stepNo, child);
                 return;
             }
             default:
