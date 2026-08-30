@@ -176,6 +176,7 @@ async function openProject(app: IApplication, autoSave: AutoSave) {
     // записи; в просмотре виден лишь прогресс.
     if (!meta?.readOnly) {
         new AiOps(
+            app,
             doc,
             id,
             () => editingEnabled,

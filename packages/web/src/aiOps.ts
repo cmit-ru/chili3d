@@ -1,7 +1,7 @@
 // Part of the Chili3d Project, under the AGPL-3.0 License.
 // See LICENSE file in the project root for full license information.
 //
-// Форк «Макетки»: исполнитель пакетов построения ИИ-помощника (фаза Б).
+// Форк «Макетки»: исполнитель пакетов построения ИИ-помощника (фазы Б/В).
 //
 // Помощник преподавателя присылает через оболочку план построения — до 60
 // операций из фиксированного словаря. Вкладка с открытой работой опрашивает
@@ -9,10 +9,13 @@
 // за тик, так что модель собирается на глазах. Исполнитель один («руль» на
 // сервере, TTL 90 секунд) — вторая вкладка только показывает прогресс.
 //
+// Пока пакет активен, поверх редактора висит прозрачный щит со строкой
+// состояния: «строит помощник, ничего не нажимайте» — и кнопкой «Остановить».
+//
 // Ошибки не скрываются: сбойный шаг останавливает пакет, и «прервано на
 // шаге N» видят и вкладка, и помощник. Ссылки шагов на созданные узлы живут
-// в памяти вкладки: если она перезагрузилась посреди пакета, шаг со ссылкой
-// на потерянный узел честно падает — помощник пришлёт новый пакет.
+// в памяти вкладки; «взять_из_сцены» ссылается на узлы по той же нумерации,
+// что и выжимка work() оболочки: плоский обход дерева, папка работы — №1.
 
 import {
     BooleanNode,
@@ -20,16 +23,21 @@ import {
     ConeNode,
     CylinderNode,
     ExtrudeNode,
+    PolygonNode,
     RegularPolygonNode,
     RevolvedNode,
     SphereNode,
 } from "@chili3d/app";
 import {
     EditableShapeNode,
+    FolderNode,
+    GeometryNode,
+    type IApplication,
     type IDocument,
     type INode,
     type IShape,
     Line,
+    Material,
     Matrix4,
     Plane,
     type Result,
@@ -40,12 +48,12 @@ import {
 } from "@chili3d/core";
 
 /** Версия словаря операций. Пакет другой версии не исполняется (tz-ai.md §5). */
-const DICT_VERSION = 2;
+const DICT_VERSION = 3;
 
 const IDLE_MS = 5_000;
 const ACTIVE_MS = 1_000;
 
-/** Шаг словаря v1: имена операций русские, параметры — латиницей (данные оболочки). */
+/** Шаг словаря: имена операций русские, параметры — латиницей (данные оболочки). */
 interface OpData {
     op: string;
     x?: number;
@@ -72,6 +80,13 @@ interface OpData {
     cy?: number;
     cz?: number;
     index?: number;
+    points?: number[][];
+    color?: string;
+    field?: string;
+    value?: number;
+    factor?: number;
+    thickness?: number;
+    edges?: number[];
 }
 
 interface OpsStep {
@@ -95,39 +110,77 @@ const planeAt = (origin: XYZ) => new Plane({ origin, normal: XYZ.unitZ, xvec: XY
 
 const degToRad = (deg: number) => (deg * Math.PI) / 180;
 
+/** Поля, которые можно менять операцией «изменить» — сеттеры параметрических узлов. */
+const EDITABLE_FIELDS = new Set(["dx", "dy", "dz", "radius", "sides", "length", "angle"]);
+
 export class AiOps {
-    private timer: number | undefined;
     private busy = false;
-    private finishedBatch = 0;
+    private wasActive = false;
     private readonly nodesByStep = new Map<number, INode>();
-    private readonly banner: HTMLDivElement;
+    private readonly shield: HTMLDivElement;
+    private readonly statusLine: HTMLDivElement;
+    private readonly stopButton: HTMLButtonElement;
+    private hideTimer: number | undefined;
 
     constructor(
+        private readonly app: IApplication,
         private readonly doc: IDocument,
         private readonly projectId: string,
         private readonly canExecute: () => boolean,
         private readonly saveNow: () => Promise<unknown>,
     ) {
-        this.banner = document.createElement("div");
-        this.banner.style.cssText =
-            "position:fixed;right:16px;bottom:16px;z-index:60;display:none;max-width:340px;" +
-            "background:#1f2430;color:#fff;padding:10px 14px;border-radius:8px;font:13px/1.5 " +
-            "system-ui,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.35)";
-        document.body.appendChild(this.banner);
+        this.shield = document.createElement("div");
+        this.shield.style.cssText = "position:fixed;inset:0;z-index:55;display:none;background:transparent";
+        const bar = document.createElement("div");
+        bar.style.cssText =
+            "position:absolute;top:14px;left:50%;transform:translateX(-50%);display:flex;" +
+            "align-items:center;gap:14px;background:#1f2430;color:#fff;padding:12px 18px;" +
+            "border-radius:10px;font:14px/1.5 system-ui,sans-serif;" +
+            "box-shadow:0 6px 24px rgba(0,0,0,.4);max-width:min(92vw,560px)";
+        this.statusLine = document.createElement("div");
+        this.stopButton = document.createElement("button");
+        this.stopButton.textContent = "Остановить";
+        this.stopButton.style.cssText =
+            "border:1px solid #5a6272;background:transparent;color:#fff;padding:6px 12px;" +
+            "border-radius:6px;cursor:pointer;font:13px system-ui,sans-serif;flex:none";
+        this.stopButton.onclick = () => void this.cancel();
+        bar.appendChild(this.statusLine);
+        bar.appendChild(this.stopButton);
+        this.shield.appendChild(bar);
+        document.body.appendChild(this.shield);
         this.schedule(IDLE_MS);
     }
 
-    private show(text: string) {
-        this.banner.textContent = text;
-        this.banner.style.display = "block";
+    /** Щит на время пакета: видно всё, нажать ничего нельзя — работает помощник. */
+    private show(text: string, options?: { blocking?: boolean; stoppable?: boolean }) {
+        if (this.hideTimer) window.clearTimeout(this.hideTimer);
+        this.statusLine.textContent = text;
+        this.shield.style.display = "block";
+        this.shield.style.pointerEvents = options?.blocking === false ? "none" : "auto";
+        this.stopButton.style.display = options?.stoppable === false ? "none" : "block";
+    }
+
+    private showFinal(text: string) {
+        this.show(text, { blocking: false, stoppable: false });
+        this.hideTimer = window.setTimeout(() => this.hide(), 6_000);
     }
 
     private hide() {
-        this.banner.style.display = "none";
+        this.shield.style.display = "none";
+    }
+
+    private async cancel() {
+        this.stopButton.disabled = true;
+        await fetch(`/api/projects/${this.projectId}/ops-cancel`, {
+            method: "POST",
+            credentials: "same-origin",
+        }).catch(() => undefined);
+        this.stopButton.disabled = false;
+        this.showFinal("Построение остановлено.");
     }
 
     private schedule(ms: number) {
-        this.timer = window.setTimeout(() => void this.tick(), ms);
+        window.setTimeout(() => void this.tick(), ms);
     }
 
     private async tick() {
@@ -149,45 +202,62 @@ export class AiOps {
             credentials: "same-origin",
         });
         if (!response.ok) return IDLE_MS;
-        const data = (await response.json()) as { batch: OpsBatch | null; role?: string };
+        const data = (await response.json()) as {
+            batch: OpsBatch | null;
+            role?: string;
+            snapshot_wanted?: boolean;
+        };
+        // Свежий снимок по запросу помощника — вне зависимости от пакетов.
+        if (data.snapshot_wanted) void this.sendSnapshot();
+
         if (!data.batch) {
-            if (this.finishedBatch === -1) this.hide(); // пакет отменили извне
-            this.finishedBatch = -1;
+            if (this.wasActive) {
+                this.wasActive = false;
+                this.showFinal("Построение остановлено.");
+            }
             return IDLE_MS;
         }
 
         const batch = data.batch;
+        this.wasActive = true;
         if (data.role !== "executor" || !this.canExecute()) {
             const appliedCount = batch.steps.filter((s) => s.applied).length;
-            this.show(`Помощник строит в другой вкладке: шаг ${appliedCount} из ${batch.steps.length}`);
+            this.show(
+                `Сейчас строит помощник (в другой вкладке): шаг ${appliedCount} из ${batch.steps.length}. Пожалуйста, ничего не нажимайте.`,
+            );
             return ACTIVE_MS;
         }
 
         if (batch.dict_version !== DICT_VERSION) {
             await this.report(batch.id, 1, false, "словарь операций другой версии — обновите вкладку");
-            this.show("Помощник говорит на другой версии словаря — обновите страницу.");
+            this.showFinal("Помощник говорит на другой версии словаря — обновите страницу.");
+            this.wasActive = false;
             return IDLE_MS;
         }
 
         const step = batch.steps.find((s) => !s.applied);
         if (!step) return IDLE_MS;
 
-        this.show(`Помощник строит: шаг ${step.step_no} из ${batch.steps.length}`);
+        this.show(
+            `Сейчас строит помощник: шаг ${step.step_no} из ${batch.steps.length}. Пожалуйста, ничего не нажимайте.`,
+        );
         try {
             this.apply(step.step_no, step.op);
             const done = await this.report(batch.id, step.step_no, true);
             if (done) {
-                this.show("Помощник закончил построение — работа сохранена.");
+                this.wasActive = false;
+                this.showFinal("Помощник закончил построение — работа сохранена.");
                 this.nodesByStep.clear();
                 await this.saveNow().catch(() => undefined);
-                window.setTimeout(() => this.hide(), 6_000);
+                await this.sendSnapshot(); // превью не ждёт минутного троттлинга
                 return IDLE_MS;
             }
             return ACTIVE_MS;
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             await this.report(batch.id, step.step_no, false, message);
-            this.show(`Прервано на шаге ${step.step_no}: ${message}`);
+            this.wasActive = false;
+            this.showFinal(`Прервано на шаге ${step.step_no}: ${message}`);
             this.nodesByStep.clear();
             return IDLE_MS;
         }
@@ -202,6 +272,51 @@ export class AiOps {
         });
         if (!response.ok) return false;
         return Boolean(((await response.json()) as { done?: boolean }).done);
+    }
+
+    /** Свежий кадр сцены — тем же рендерером, что и обычное превью. */
+    private async sendSnapshot() {
+        try {
+            const image = this.app.activeView?.toImage(320);
+            if (!image) return;
+            await fetch(`/api/projects/${this.projectId}/preview`, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ thumb: image }),
+            });
+        } catch {
+            // снимок не критичен: следующий запрос повторит
+        }
+    }
+
+    /* ------------------------- дерево работы ------------------------- */
+
+    /**
+     * Плоский список узлов В ТОЙ ЖЕ нумерации, что выжимка work() оболочки:
+     * обход в глубину, папка работы — №1. Иначе помощник промахивается
+     * («взять_из_сцены» видела одно дерево, work() — другое).
+     */
+    private flatNodes(): INode[] {
+        const out: INode[] = [];
+        const walk = (node: INode | undefined) => {
+            let current = node;
+            while (current) {
+                out.push(current);
+                const child = (current as { firstChild?: INode }).firstChild;
+                if (child) walk(child);
+                current = current.nextSibling;
+            }
+        };
+        walk(this.doc.modelManager.rootNode.firstChild);
+        return out;
+    }
+
+    /** Куда класть новые узлы: в папку работы, рядом с ручными фигурами. */
+    private targetParent(): { add(...nodes: INode[]): void } {
+        const first = this.doc.modelManager.rootNode.firstChild;
+        if (first instanceof FolderNode) return first;
+        return this.doc.modelManager.rootNode;
     }
 
     /* ------------------------- исполнение операций ------------------------- */
@@ -222,24 +337,13 @@ export class AiOps {
         return found;
     }
 
-    /** Центр поворота по умолчанию — центр фигуры в мировых координатах (v2). */
-    private rotationCenter(target: ShapeNode, op: OpData): XYZ {
-        if (op.cx !== undefined || op.cy !== undefined || op.cz !== undefined) {
-            return new XYZ({ x: Number(op.cx ?? 0), y: Number(op.cy ?? 0), z: Number(op.cz ?? 0) });
-        }
-        const box = this.shapeOf(target).boundingBox();
-        const local = new XYZ({
-            x: (box.min.x + box.max.x) / 2,
-            y: (box.min.y + box.max.y) / 2,
-            z: (box.min.z + box.max.z) / 2,
-        });
-        return target.transform.ofPoint(local);
-    }
-
+    /** Геометрия узла в мировых координатах: булевы и модификаторы должны
+     *  видеть тело уже повёрнутым/сдвинутым — как штатные команды редактора
+     *  (см. transformedMul в commands/boolean.ts). */
     private shapeOf(node: ShapeNode): IShape {
         const shape = node.shape as Result<IShape>;
         if (!shape.isOk) throw new Error("у узла нет геометрии");
-        return shape.value;
+        return shape.value.transformedMul(node.worldTransform());
     }
 
     private unwrap<T>(result: Result<T>, what: string): T {
@@ -247,8 +351,29 @@ export class AiOps {
         return result.value;
     }
 
+    /** Центр фигуры в мировых координатах (для поворота/масштаба/зеркала). */
+    private centerOf(target: ShapeNode, op?: OpData): XYZ {
+        if (op && (op.cx !== undefined || op.cy !== undefined || op.cz !== undefined)) {
+            return new XYZ({ x: Number(op.cx ?? 0), y: Number(op.cy ?? 0), z: Number(op.cz ?? 0) });
+        }
+        // shapeOf уже в мировых координатах — центр bbox и есть мировой центр.
+        const box = this.shapeOf(target).boundingBox();
+        return new XYZ({
+            x: (box.min.x + box.max.x) / 2,
+            y: (box.min.y + box.max.y) / 2,
+            z: (box.min.z + box.max.z) / 2,
+        });
+    }
+
+    /** Матрица «вокруг точки»: перенос в ноль → преобразование → обратно. */
+    private aroundPoint(center: XYZ, m: Matrix4): Matrix4 {
+        return Matrix4.fromTranslation(-center.x, -center.y, -center.z)
+            .multiply(m)
+            .multiply(Matrix4.fromTranslation(center.x, center.y, center.z));
+    }
+
     private addNode(stepNo: number, node: INode) {
-        this.doc.modelManager.addNode(node);
+        this.targetParent().add(node);
         this.nodesByStep.set(stepNo, node);
     }
 
@@ -260,6 +385,17 @@ export class AiOps {
             if (value === oldNode) this.nodesByStep.set(key, fresh);
         }
         this.nodesByStep.set(stepNo, fresh);
+    }
+
+    private edgeIndexes(shape: IShape, wanted?: number[]): number[] {
+        const total = shape.findSubShapes(ShapeTypes.edge).length;
+        if (!wanted?.length) return Array.from({ length: total }, (_, i) => i + 1);
+        for (const e of wanted) {
+            if (!Number.isInteger(e) || e < 1 || e > total) {
+                throw new Error(`ребра №${e} нет: у фигуры ${total} рёбер`);
+            }
+        }
+        return wanted;
     }
 
     private apply(stepNo: number, op: OpData) {
@@ -327,6 +463,18 @@ export class AiOps {
                 if ("isFace" in node) (node as { isFace: boolean }).isFace = true;
                 return this.addNode(stepNo, node);
             }
+            case "контур": {
+                const z = Number(op.z ?? 0);
+                const pts = (op.points as number[][]).map(
+                    ([px, py]) => new XYZ({ x: Number(px), y: Number(py), z }),
+                );
+                // Контур замыкается сам: последняя точка соединяется с первой.
+                if (!pts[0].isEqualTo(pts[pts.length - 1])) pts.push(pts[0]);
+                const node = new PolygonNode({ document: this.doc, points: pts });
+                node.name = "Контур";
+                if ("isFace" in node) (node as { isFace: boolean }).isFace = true;
+                return this.addNode(stepNo, node);
+            }
             case "выдавить": {
                 const source = this.node(op.node);
                 const node = new ExtrudeNode({
@@ -352,8 +500,7 @@ export class AiOps {
             case "фаска": {
                 const source = this.node(op.node);
                 const shape = this.shapeOf(source);
-                // Все рёбра тела: индексация подрёбер в ядре — 1..N (OCCT).
-                const edges = shape.findSubShapes(ShapeTypes.edge).map((_, i) => i + 1);
+                const edges = this.edgeIndexes(shape, op.edges);
                 const result =
                     kind === "скруглить"
                         ? shapeFactory.fillet(shape, edges, Number(op.radius))
@@ -362,6 +509,19 @@ export class AiOps {
                     document: this.doc,
                     name: source.name || (kind === "скруглить" ? "Скругление" : "Фаска"),
                     shape: this.unwrap(result, kind === "скруглить" ? "скругление" : "фаска"),
+                });
+                return this.replaceNode(stepNo, source, fresh);
+            }
+            case "полость": {
+                const source = this.node(op.node);
+                const result = shapeFactory.makeThickSolidBySimple(
+                    this.shapeOf(source),
+                    -Math.abs(Number(op.thickness)),
+                );
+                const fresh = new EditableShapeNode({
+                    document: this.doc,
+                    name: source.name || "Полость",
+                    shape: this.unwrap(result, "полость"),
                 });
                 return this.replaceNode(stepNo, source, fresh);
             }
@@ -402,11 +562,34 @@ export class AiOps {
             }
             case "повернуть": {
                 const target = this.node(op.node);
-                const center = this.rotationCenter(target, op);
+                const center = this.centerOf(target, op);
                 target.transform = target.transform.multiply(
                     Matrix4.fromAxisRad(center, axisVector(op.axis), degToRad(Number(op.angle))),
                 );
                 this.nodesByStep.set(stepNo, target);
+                return;
+            }
+            case "масштабировать": {
+                const target = this.node(op.node);
+                const f = Number(op.factor);
+                const center = this.centerOf(target, op);
+                target.transform = target.transform.multiply(
+                    this.aroundPoint(center, Matrix4.fromScale(f, f, f)),
+                );
+                this.nodesByStep.set(stepNo, target);
+                return;
+            }
+            case "зеркало": {
+                const target = this.node(op.node);
+                const plane = new Plane({
+                    origin: this.centerOf(target, op),
+                    normal: axisVector(op.axis),
+                    xvec: op.axis === "x" ? XYZ.unitY : XYZ.unitX,
+                });
+                const clone = target.clone();
+                clone.transform = target.transform.multiply(Matrix4.createMirrorWithPlane(plane));
+                target.parent?.insertAfter(target, clone);
+                this.nodesByStep.set(stepNo, clone);
                 return;
             }
             case "размножить_по_кругу": {
@@ -440,13 +623,54 @@ export class AiOps {
                 return;
             }
             case "именовать": {
-                const target = this.node(op.node);
+                const target = this.anyNode(op.node);
                 target.name = String(op.name).slice(0, 60);
+                this.nodesByStep.set(stepNo, target);
+                return;
+            }
+            case "покрасить": {
+                const target = this.node(op.node);
+                if (!(target instanceof GeometryNode)) {
+                    throw new Error("красить можно только фигуру");
+                }
+                const color = Number.parseInt(String(op.color).replace("#", ""), 16);
+                if (!Number.isFinite(color)) throw new Error("цвет задаётся как #rrggbb");
+                const material = new Material({
+                    document: this.doc,
+                    name: `Цвет ${op.color}`,
+                    color,
+                });
+                this.doc.modelManager.materials.push(material);
+                target.materialId = material.id;
+                this.nodesByStep.set(stepNo, target);
+                return;
+            }
+            case "изменить": {
+                const target = this.node(op.node);
+                const field = String(op.field);
+                if (!EDITABLE_FIELDS.has(field)) {
+                    throw new Error(`поле «${field}» менять нельзя`);
+                }
+                const editable = target as unknown as Record<string, unknown>;
+                if (typeof editable[field] !== "number") {
+                    throw new Error(`у этой фигуры нет поля «${field}»`);
+                }
+                editable[field] = Number(op.value);
+                this.nodesByStep.set(stepNo, target);
+                return;
+            }
+            case "скрыть":
+            case "показать": {
+                const target = this.anyNode(op.node);
+                (target as { visible: boolean }).visible = kind === "показать";
                 this.nodesByStep.set(stepNo, target);
                 return;
             }
             case "удалить": {
                 const target = this.anyNode(op.node);
+                if (target instanceof FolderNode) {
+                    throw new Error("папку работы удалять нельзя — удаляйте фигуры по одной");
+                }
                 target.parent?.remove(target);
                 for (const [key, value] of this.nodesByStep) {
                     if (value === target) this.nodesByStep.delete(key);
@@ -454,18 +678,12 @@ export class AiOps {
                 return;
             }
             case "взять_из_сцены": {
-                // Доступ к узлам, созданным вне пакета (v2): без него помощник
-                // не мог исправить собственную ошибку. Номер — по порядку в
-                // корне дерева работы, 1-based.
-                let child = this.doc.modelManager.rootNode.firstChild;
-                let n = 1;
+                // Нумерация — как в выжимке work(): плоский обход, папка — №1.
+                const all = this.flatNodes();
                 const want = Number(op.index);
-                while (child && n < want) {
-                    child = child.nextSibling;
-                    n += 1;
-                }
-                if (!child) throw new Error(`в сцене нет узла №${want}`);
-                this.nodesByStep.set(stepNo, child);
+                const found = all[want - 1];
+                if (!found) throw new Error(`в работе нет узла №${want} (всего ${all.length})`);
+                this.nodesByStep.set(stepNo, found);
                 return;
             }
             default:
