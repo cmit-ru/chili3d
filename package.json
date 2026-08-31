@@ -11,6 +11,8 @@
     "type": "module",
     "scripts": {
         "build": "rspack build",
+        "third-party": "node scripts/third-party.mjs",
+        "check:third-party": "node scripts/third-party.mjs --check",
         "build:wasm": "cd cpp && cmake --preset release && cmake --build --preset release",
         "build:types": "node scripts/generate_types.mjs",
         "check": "biome check --write",

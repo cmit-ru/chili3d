@@ -1,0 +1,42 @@
+[
+    {
+        "имя": "Chili3D (исходный проект)",
+        "версия": "форк от 0.7.0",
+        "правообладатель": "xiange (仙阁) и участники проекта",
+        "лицензия": "AGPL-3.0-or-later",
+        "роль": "Основа редактора; переработан (см. README, «Что изменено»)",
+        "ссылка": "https://github.com/xiangechen/chili3d"
+    },
+    {
+        "имя": "Open CASCADE Technology",
+        "версия": "см. cpp/build/occt",
+        "правообладатель": "Open CASCADE SAS",
+        "лицензия": "LGPL-2.1 с исключением Open CASCADE (версия 1.0)",
+        "роль": "Геометрическое ядро, собирается в WebAssembly; код не изменялся",
+        "ссылка": "https://dev.opencascade.org/resources/licensing"
+    },
+    {
+        "имя": "Emscripten",
+        "правообладатель": "Emscripten authors и участники проекта",
+        "версия": "по инструкции cpp/README.md",
+        "лицензия": "MIT / University of Illinois NCSA (двойная)",
+        "роль": "Компиляция ядра в WebAssembly (в поставку не входит)",
+        "ссылка": "https://github.com/emscripten-core/emscripten/blob/main/LICENSE"
+    },
+    {
+        "имя": "nginx",
+        "версия": "stable",
+        "правообладатель": "Nginx, Inc. и участники проекта",
+        "лицензия": "BSD-2-Clause",
+        "роль": "Отдача статики редактора (образ deploy/Dockerfile)",
+        "ссылка": "https://nginx.org/LICENSE"
+    },
+    {
+        "имя": "Node.js",
+        "версия": "22",
+        "правообладатель": "OpenJS Foundation",
+        "лицензия": "MIT (плюс лицензии компонентов рантайма)",
+        "роль": "Среда сборки (в поставку не входит)",
+        "ссылка": "https://github.com/nodejs/node/blob/main/LICENSE"
+    }
+]
