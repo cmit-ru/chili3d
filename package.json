@@ -4,6 +4,10 @@
     "description": "",
     "documentVersion": "0.7.1",
     "author": "仙阁",
+    "contributors": [
+        "ООО «Бравый страус» (изменения 2026 года, сервис «Макетка», cad.cmit.ru)"
+    ],
+    "license": "AGPL-3.0-or-later",
     "type": "module",
     "scripts": {
         "build": "rspack build",
