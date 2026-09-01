@@ -48,6 +48,48 @@ export function projectIdFromLocation(): string | null {
     return match ? match[1] : null;
 }
 
+/**
+ * Долгие узлы модели-образца открываются ОТДЕЛЬНО, уже после того как мастерская
+ * показана. Иначе ребёнок с лендинга смотрит на замерший экран.
+ *
+ * Почему именно развёртки (`PipeNode`). Замер 01.09.2026 на модели стартера:
+ * сама геометрия развёртки строится за 33–160 мс, а триангуляция её поверхности —
+ * от 2 до 11 секунд на узел (пять узлов дают 20 секунд из 24). У остальных узлов
+ * модели триангуляция укладывается в миллисекунды: обычный цилиндр — 12 мс.
+ * Точность сетки на это почти не влияет — дело в самой поверхности развёртки.
+ */
+const SLOW_NODE_TYPES = new Set(["PipeNode"]);
+
+let deferredNodes: any[] = [];
+
+/** Отложенные узлы забирают ОДИН раз — тот, кто их добавит в открытый документ. */
+export function takeDeferredNodes(): any[] {
+    const nodes = deferredNodes;
+    deferredNodes = [];
+    return nodes;
+}
+
+/** Экспортируется ради теста: разделение документа проверяется без браузера и сети. */
+export function deferSlowNodes(document: any): any {
+    const nodes = document?.models?.nodes;
+    if (!Array.isArray(nodes)) return document;
+
+    const slow = nodes.filter((n: any) => SLOW_NODE_TYPES.has(n?.__cla$$__));
+    if (slow.length === 0) return document;
+
+    // Сначала лёгкие: чем меньше запись узла, тем быстрее он считается,
+    // поэтому самый тяжёлый появляется последним и не задерживает остальные.
+    deferredNodes = slow
+        .map((n: any) => ({ node: n, size: JSON.stringify(n).length }))
+        .sort((a, b) => a.size - b.size)
+        .map((x) => x.node);
+
+    return {
+        ...document,
+        models: { ...document.models, nodes: nodes.filter((n: any) => !SLOW_NODE_TYPES.has(n?.__cla$$__)) },
+    };
+}
+
 /** Буфер правок в IndexedDB: переживает F5, закрытие вкладки и падение ядра. */
 class EditBuffer {
     private db?: IDBDatabase;
@@ -145,7 +187,7 @@ export class CloudStorage implements IStorage {
         if (table !== "documents") return undefined;
         if (sandboxFromLocation()) {
             const response = await fetch("/try-seed.json");
-            return response.ok ? await response.json() : undefined;
+            return response.ok ? deferSlowNodes(await response.json()) : undefined;
         }
         // Адрес работы берём ТОЛЬКО из URL: ядро подставляет сюда свой
         // внутренний id документа, и сохранение уходило по нему на сервер

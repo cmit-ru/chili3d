@@ -12,8 +12,13 @@
 //   • подключены автосохранение и индикатор состояния.
 
 import { AppBuilder } from "@chili3d/builder";
-import type { IApplication } from "@chili3d/core";
-import { type CloudStorage, projectIdFromLocation, sandboxFromLocation } from "@chili3d/storage";
+import { type IApplication, type IDocument, type INodeLinkedList, Serializer } from "@chili3d/core";
+import {
+    type CloudStorage,
+    projectIdFromLocation,
+    sandboxFromLocation,
+    takeDeferredNodes,
+} from "@chili3d/storage";
 import { SaveIndicator } from "@chili3d/ui";
 import { AiOps } from "./aiOps";
 import { AutoSave } from "./autoSave";
@@ -22,6 +27,7 @@ import { enableEconomyIfNeeded } from "./economy";
 import { FirstHint } from "./firstHint";
 import { type LessonCard, LessonPanel } from "./lessonPanel";
 import { Loading } from "./loading";
+import { ModelSpinner } from "./modelSpinner";
 import { SandboxNotice } from "./sandboxNotice";
 import { ScreenLock } from "./screenLock";
 import { SourceNotice } from "./sourceNotice";
@@ -99,19 +105,58 @@ async function fetchMeta(id: string): Promise<ProjectMeta | null> {
  * отключено хранилищем, баннер зовёт зарегистрироваться. Ни автосейва, ни
  * бейджа, ни замка — сессии нет, терять нечего.
  */
-async function openSandbox(app: IApplication) {
+async function openSandbox(app: IApplication, spinner?: ModelSpinner) {
     let doc = await app.openDocument("sandbox").catch(() => undefined);
     if (!doc) doc = await app.newDocument("Моя модель");
 
     const notice = new SandboxNotice();
     const storage = app.storage as unknown as CloudStorage;
     if (storage) storage.onSandboxSave = () => notice.nudge();
+
+    await addDeferredNodes(doc, spinner);
 }
 
-async function openProject(app: IApplication, autoSave: AutoSave, earlyMeta: ProjectMeta | null) {
+/** Отдаём кадр браузеру: спиннер продолжает крутиться, сцену можно вертеть. */
+const nextFrame = () =>
+    new Promise<void>((resolve) => {
+        requestAnimationFrame(() => window.setTimeout(resolve, 0));
+    });
+
+/**
+ * Долгие детали образца добавляются по одной, с передышкой между ними. Каждая
+ * считается секунды, поэтому разом они превращали мастерскую в замерший экран
+ * на четверть минуты (замер — в `cloudStorage.ts`, рядом с отбором таких узлов).
+ */
+async function addDeferredNodes(doc: IDocument, spinner?: ModelSpinner) {
+    const pending = takeDeferredNodes();
+    if (pending.length === 0) return;
+
+    for (const [index, data] of pending.entries()) {
+        spinner?.setText(`Собираем детали… ${index + 1} из ${pending.length}`);
+        await nextFrame();
+        try {
+            const node = Serializer.deserializeObject(doc, data);
+            const parentId = data?.parentId;
+            const parent = parentId
+                ? (doc.modelManager.findNode((n) => n.id === parentId) as INodeLinkedList | undefined)
+                : undefined;
+            (parent ?? doc.modelManager.rootNode).add(node);
+        } catch (error) {
+            // Одна не собравшаяся деталь не должна ронять всю мастерскую.
+            console.warn("[sandbox] деталь не добавилась", error);
+        }
+    }
+}
+
+async function openProject(
+    app: IApplication,
+    autoSave: AutoSave,
+    earlyMeta: ProjectMeta | null,
+    spinner?: ModelSpinner,
+) {
     const id = projectId();
     if (!id) {
-        if (sandboxFromLocation()) await openSandbox(app);
+        if (sandboxFromLocation()) await openSandbox(app, spinner);
         return;
     }
 
@@ -247,14 +292,24 @@ async function handleApplicaionBuilt(app: IApplication, earlyMeta: ProjectMeta |
     const autoSave = new AutoSave(app);
     attachSaveIndicator(app, autoSave);
 
+    // Мастерская уже собрана — показываем её, а ожидание модели переносим на
+    // накладку со спиннером. Раньше экран загрузки держался до готовности сцены,
+    // и на тяжёлой работе ребёнок видел замершую полосу вместо редактора.
+    loading.dispose();
+    loading.remove();
+    const spinner = new ModelSpinner();
+    document.body.appendChild(spinner);
+    // Без передышки браузер не успеет нарисовать ни мастерскую, ни спиннер:
+    // расчёт геометрии идёт в том же потоке и начнётся раньше первой отрисовки.
+    await nextFrame();
+
     try {
-        await openProject(app, autoSave, earlyMeta);
+        await openProject(app, autoSave, earlyMeta, spinner);
     } catch (error) {
         console.warn("[project]", error);
     }
 
-    loading.dispose();
-    loading.remove();
+    spinner.remove();
 }
 
 // Мета грузится ДО сборки приложения: флаг «общие компьютеры класса» должен
@@ -276,7 +331,8 @@ earlyMeta
             .useThree()
             .useUI()
             .build()
-            .then((app) => handleApplicaionBuilt(app, meta)))
+            .then((app) => handleApplicaionBuilt(app, meta)),
+    )
     .catch((err) => {
         // Экран «не загрузилось» с понятным текстом вместо системного alert
         loading.showError(err?.message ?? String(err));
