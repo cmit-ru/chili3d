@@ -106,6 +106,11 @@ export function openWorkPicker(options: WorkPickerOptions) {
         const button = document.createElement("button");
         button.type = "button";
         button.style.cssText = ROW;
+        // Опоры окна (`frame-contract.md`, «Опоры для теста»): в схемах у рядов
+        // свои классы, поэтому спека цепляется за эти атрибуты — они одни на две
+        // мастерские.
+        button.dataset["openRow"] = "";
+        if (here) button.dataset["here"] = "";
         if (here) {
             button.setAttribute("aria-disabled", "true");
             button.style.cursor = "default";
