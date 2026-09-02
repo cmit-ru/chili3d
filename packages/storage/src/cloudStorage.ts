@@ -15,8 +15,15 @@ import type { IStorage } from "@chili3d/core";
 export type SaveState = "idle" | "saving" | "saved" | "offline" | "conflict" | "error";
 
 export interface ConflictInfo {
-    serverRev: number;
+    serverRev?: number;
     changedAt?: string;
+    /**
+     * Короткий код неудачи для взрослого: он уходит мелкой строкой в баннер
+     * трёх неудач («покажи преподавателю: работа 7, ошибка 500»). Без него
+     * преподаватель видит ровно тот же текст, что ребёнок, и не знает даже,
+     * у одного это ученика или у всего класса.
+     */
+    code?: string;
 }
 
 type StateListener = (state: SaveState, info?: ConflictInfo) => void;
@@ -249,7 +256,7 @@ export class CloudStorage implements IStorage {
             });
         } catch {
             // Сеть пропала: правки в буфере, работу можно продолжать.
-            this.emit("offline");
+            this.emit("offline", { code: "нет ответа" });
             return false;
         }
 
@@ -259,11 +266,11 @@ export class CloudStorage implements IStorage {
             return false;
         }
         if (response.status === 401) {
-            this.emit("error");
+            this.emit("error", { code: "401" });
             return false;
         }
         if (!response.ok) {
-            this.emit("error");
+            this.emit("error", { code: String(response.status) });
             return false;
         }
 

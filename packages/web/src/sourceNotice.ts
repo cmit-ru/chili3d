@@ -13,6 +13,8 @@
 // Оформление намеренно тихое: это обязательство перед лицензией, а не элемент
 // урока, и оно не должно отвлекать ребёнка от работы.
 
+import { FRAME_FONT } from "./errorBanner";
+
 export class SourceNotice {
     constructor() {
         const link = document.createElement("a");
@@ -21,18 +23,22 @@ export class SourceNotice {
         link.rel = "noopener";
         link.textContent = "Открытый код";
         link.title = "Исходный код этой версии редактора (лицензия AGPL-3.0)";
+        link.dataset["framePlace"] = "bottom-right";
+        link.dataset["frameGroup"] = "corner-notices";
+        // Ссылка висит над канвасом WebGL. Без непрозрачной подложки «контраст к
+        // фону» означал бы контраст к тому, что ребёнок нарисовал в этом углу, —
+        // то есть не означал бы ничего. Кегль, цвет и подложка — по INV-010 и
+        // AGPL §13: предложение исходников обязано быть заметным.
         link.style.cssText = `
             position: fixed; right: 12px; bottom: 8px; z-index: 300;
-            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-            font-size: 11.5px; color: var(--foreground-color, #4a625b); opacity: .55;
-            text-decoration: none; padding: 2px 4px;
+            font-family: ${FRAME_FONT}; font-size: 12.5px; color: #4a625b;
+            text-decoration: none; padding: 5px 8px; border-radius: 6px;
+            background: #fff; border: 1px solid #c7d3ce;
         `;
         link.onmouseenter = () => {
-            link.style.opacity = "1";
             link.style.textDecoration = "underline";
         };
         link.onmouseleave = () => {
-            link.style.opacity = ".55";
             link.style.textDecoration = "none";
         };
         document.body.appendChild(link);

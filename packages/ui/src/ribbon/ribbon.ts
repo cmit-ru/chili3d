@@ -6,11 +6,9 @@ import {
     type CommandKeys,
     CommandStore,
     Config,
-    I18n,
     type IApplication,
     type ICommand,
     type IConverter,
-    type IView,
     Localize,
     Logger,
     PubSub,
@@ -29,6 +27,26 @@ import { RibbonGroupElement } from "./ribbonGroup";
 // переименование не должно требовать правок в коде редактора.
 const BRAND_NAME = (globalThis as { MAKETKA_BRAND?: string }).MAKETKA_BRAND ?? "Макетка";
 
+/** Адрес и подпись возврата: их отдаёт сервер в мете работы (поле `backTo`). */
+interface BackTo {
+    href: string;
+    label?: string;
+}
+
+/**
+ * Куда ведёт знак «Макетка». Раньше здесь стоял жёсткий `/home`, и решение
+ * «куда именно домой» принимал клиент по роли — из-за этого преподавателя
+ * уводило из его же работы «к группам». Теперь решает сервер: оболочка кладёт
+ * ответное поле `backTo` в глобальную переменную до сборки приложения, а
+ * `/home` остаётся запасным на случай песочницы и гостя, где меты нет.
+ */
+function backTo(): BackTo {
+    const value = (globalThis as { MAKETKA_BACK_TO?: BackTo | string }).MAKETKA_BACK_TO;
+    if (typeof value === "string") return { href: value };
+    if (value && typeof value.href === "string") return value;
+    return { href: "/home" };
+}
+
 export const QuickButton = (command: ICommand) => {
     const data = CommandStore.getComandData(command);
     if (!data) {
@@ -46,18 +64,6 @@ export const QuickButton = (command: ICommand) => {
         icon,
     );
 };
-
-class ViewActiveConverter implements IConverter<IView> {
-    constructor(
-        readonly target: IView,
-        readonly style: string,
-        readonly activeStyle: string,
-    ) {}
-
-    convert(value: IView): Result<string> {
-        return Result.ok(this.target === value ? `${this.style} ${this.activeStyle}` : this.style);
-    }
-}
 
 class ActivedRibbonTabConverter implements IConverter<RibbonTab> {
     constructor(
@@ -112,26 +118,38 @@ export class RibbonUI extends HTMLElement {
     };
 
     private header() {
-        return div({ className: style.titleBar }, this.leftPanel(), this.centerPanel(), this.rightPanel());
+        // `data-frame-*` — опоры для спеки паритета двух мастерских
+        // (`frame-contract.md`, «Опоры для теста»). Логики на них не висит:
+        // это только зацепки, по которым тест находит зоны и меряет полосу.
+        return div(
+            { className: style.titleBar, id: "frame-bar", dataset: { frameBar: "" } },
+            this.leftPanel(),
+            this.centerPanel(),
+            this.mainPanel(),
+            this.rightPanel(),
+        );
     }
 
     private leftPanel() {
+        const back = backTo();
         return div(
             { className: style.left },
-            // Форк «Макетки»: имя продукта берётся из настроек оболочки, а клик
-            // ведёт домой. Домашний экран редактора скрыт — список работ живёт в
-            // кабинете, и второй такой же только путает. Куда именно «домой»,
-            // решает оболочка по роли (`/home`, B-097): ученику — его работы,
-            // преподавателю — группы, гостю — лендинг, а не чужой экран ввода кода.
-            div(
+            // Форк «Макетки»: знак продукта — настоящая ссылка, а не `div` с
+            // обработчиком: работают Tab, Enter и средняя кнопка мыши, а в классе
+            // мышь ломается регулярно. Домашний экран редактора скрыт — список
+            // работ живёт в кабинете, и второй такой же только путает.
+            a(
                 {
                     className: style.appIcon,
-                    onclick: () => {
-                        window.location.href = "/home";
-                    },
+                    href: back.href,
+                    dataset: { frameZone: "знак" },
                 },
                 svg({ className: style.icon, icon: "icon-chili" }),
                 span({ id: "appName", textContent: BRAND_NAME }),
+                // Подпись возврата («← К примерам», «← К группам», «← Мои работы»)
+                // приходит от сервера вместе с адресом. Её нет только у запасного
+                // `/home`, где «куда именно» решает уже оболочка, — там знака хватает.
+                ...(back.label ? [span({ className: style.backLabel, textContent: back.label })] : []),
             ),
             div(
                 { className: style.ribbonTitlePanel },
@@ -172,50 +190,26 @@ export class RibbonUI extends HTMLElement {
     }
 
     private centerPanel() {
-        return div(
-            { className: style.center },
-            collection({
-                className: style.views,
-                sources: this.app.views,
-                template: (view) => this.createViewItem(view),
-            }),
-            svg({
-                className: style.new,
-                icon: "icon-plus",
-                title: I18n.translate("command.doc.new"),
-                onclick: () => PubSub.default.pub("executeCommand", "doc.new"),
-            }),
-        );
+        // Форк «Макетки»: коллекции вкладок документов и «+» здесь больше нет.
+        // Работа на странице одна, а «+» заводил документ без номера работы —
+        // он не сохранялся никуда и пропадал вместе с вкладкой. Вместо вкладок —
+        // пустой контейнер, в который наш `frameBar` кладёт имя работы с меню и
+        // состояние сохранения.
+        return div({ className: style.center, id: "frame-work", dataset: { frameZone: "работа" } });
     }
 
-    private createViewItem(view: IView) {
-        return div(
-            {
-                className: new Binding(
-                    this.app,
-                    "activeView",
-                    new ViewActiveConverter(view, style.tab, style.active),
-                ),
-                onclick: () => {
-                    this.app.activeView = view;
-                },
-            },
-            div({ className: style.name }, span({ textContent: new Binding(view.document, "name") })),
-            svg({
-                className: style.close,
-                icon: "icon-times",
-                onclick: (e) => {
-                    e.stopPropagation();
-                    view.close();
-                },
-            }),
-        );
+    private mainPanel() {
+        // Третья зона контракта — главное действие мастерской. В схемах здесь
+        // «▶ Включить», в 3D действия нет: строить фигуру нечем одной кнопкой.
+        // Пустое место всё равно объявлено, иначе спека паритета не сможет
+        // сверить порядок зон — у неё окажется три зоны против четырёх.
+        return div({ dataset: { frameZone: "главное-действие" } });
     }
 
     private rightPanel() {
         // Внешних ссылок в шапке нет: ребёнок на уроке не должен уходить из
-        // мастерской. Исходный код и лицензии — на странице «О программе».
-        return div({ className: style.right });
+        // мастерской. Здесь стоит блок пользователя — его кладёт наш `frameBar`.
+        return div({ className: style.right, id: "frame-user", dataset: { frameZone: "человек" } });
     }
 
     private ribbonTabs() {

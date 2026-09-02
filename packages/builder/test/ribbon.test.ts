@@ -57,7 +57,10 @@ describe("DefaultRibbon", () => {
         expect(visible).toContain("create.box");
         expect(visible).toContain("modify.fillet");
         expect(visible).toContain("boolean.cut");
-        expect(visible).toContain("file.export");
+        // «Экспорт» из ленты убран: скачивание живёт в меню работы, окном
+        // «Что скачать?» (B-103). В ленте от обмена остался только импорт.
+        expect(visible).toContain("file.import");
+        expect(visible).not.toContain("file.export");
     });
 
     test("draw group should contain create commands", () => {

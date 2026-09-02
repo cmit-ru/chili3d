@@ -42,6 +42,9 @@ export class Editor extends HTMLElement {
     private render() {
         this._sidebarEl = div(
             {
+                // Стабильный id: панель урока форка «Макетки» встаёт первым
+                // ребёнком этой колонки, а не накладкой поверх свойств фигуры.
+                id: "editor-sidebar",
                 className: style.sidebar,
                 style: `width: ${this._sidebarWidth}px;`,
             },

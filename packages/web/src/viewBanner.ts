@@ -9,8 +9,13 @@
 // него изменения сохраняются в работу ученика, а плашка честно напоминает,
 // в чьей работе идёт правка. Вторая кнопка забирает копию себе.
 
+import { FRAME_FONT } from "./errorBanner";
+import { placeAsMode } from "./frameBar";
+
 export interface ViewBannerOptions {
     ownerName: string;
+    /** Пример из общей полки: слова другие, действие то же. */
+    isExample?: boolean;
     /** Есть ли вообще право править (у преподавателя группы и админа — есть). */
     canEdit: boolean;
     /** Вызывается при переключении в правку: включает автосохранение. */
@@ -25,13 +30,13 @@ export class ViewBanner {
     constructor(private readonly options: ViewBannerOptions) {
         this.root = document.createElement("div");
         this.root.style.cssText = `
-            position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 460;
             display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-            padding: 8px 12px; border-radius: 6px;
+            padding: 8px 12px; border-radius: 8px;
             background: #fdf6e3; border: 1px solid #c98a10; color: #7a5408;
-            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            font-family: ${FRAME_FONT};
             font-size: 13.5px; max-width: min(680px, calc(100vw - 24px));
         `;
+        placeAsMode(this.root);
         this.showViewing();
         document.body.appendChild(this.root);
     }
@@ -41,17 +46,22 @@ export class ViewBanner {
         el.type = "button";
         el.textContent = label;
         el.style.cssText = primary
-            ? `font: inherit; font-weight: 600; padding: 6px 12px; border-radius: 4px;
-               border: none; background: #c98a10; color: #fff; cursor: pointer;`
-            : `font: inherit; padding: 6px 12px; border-radius: 4px; cursor: pointer;
-               border: 1px solid #c98a10; background: none; color: #7a5408;`;
+            ? `font: inherit; font-weight: 600; padding: 6px 12px; border-radius: 6px;
+               min-height: 24px; border: none; background: #c98a10; color: #fff; cursor: pointer;`
+            : `font: inherit; padding: 6px 12px; border-radius: 6px; min-height: 24px;
+               cursor: pointer; border: 1px solid #c98a10; background: none; color: #7a5408;`;
         return el;
     }
 
     private showViewing() {
         this.root.innerHTML = "";
+        // Слова плашки — общие с мастерской схем (`frame-contract.md`, «Слова
+        // режимов»). Имя хозяина работы остаётся в плашке правки: там оно и
+        // нужно — напомнить, в чьей работе идут изменения.
         const text = document.createElement("span");
-        text.textContent = `Это работа: ${this.options.ownerName}. Вы смотрите — изменения не сохранятся.`;
+        text.textContent = this.options.isExample
+            ? "Это пример — сохрани копию себе"
+            : "Чужая работа — сохрани копию себе";
         this.root.appendChild(text);
 
         if (this.options.canEdit) {
@@ -63,10 +73,11 @@ export class ViewBanner {
             this.root.appendChild(edit);
         }
 
-        const copy = this.button("Сохранить копию себе", false);
+        // Одно действие — одно слово: «Забрать себе» стоит и в меню работы.
+        const copy = this.button("Забрать себе", false);
         copy.onclick = async () => {
             copy.disabled = true;
-            copy.textContent = "Копируем…";
+            copy.textContent = "Сохраняю…";
             const id = await this.options.onCopy();
             if (id) {
                 window.location.assign(`/3d/${id}`);

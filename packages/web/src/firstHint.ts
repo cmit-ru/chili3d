@@ -8,10 +8,14 @@
 // в один клик и больше не приходит: отметка хранится у аккаунта, поэтому на
 // другом компьютере класса она не покажется заново.
 
+import { FRAME_FONT } from "./errorBanner";
+
 const STEPS = [
     {
         title: "Выбери фигуру наверху",
-        text: "Кубик, шар или линия — всё это на ленте вверху. Нажми на нужную и рисуй.",
+        // Слова «лента» здесь нет намеренно: ребёнок десяти лет знает ленту
+        // новостей, а не ленту Microsoft Office.
+        text: "Кубик, шар или линия — всё это наверху. Нажми на нужную и рисуй.",
     },
     {
         title: "Щёлкай по сцене",
@@ -19,7 +23,8 @@ const STEPS = [
     },
     {
         title: "Работа сохраняется сама",
-        text: "Слева внизу видно, когда работа сохранена. Можно спокойно закрыть вкладку.",
+        text:
+            "Наверху, рядом с именем работы, видно, сохранилась ли она. " + "Можно спокойно закрыть вкладку.",
     },
 ];
 
@@ -33,14 +38,18 @@ export class FirstHint {
 
     constructor(private readonly onDone: () => void) {
         this.root = document.createElement("div");
+        // Левый нижний угол, а не низ по центру: там у ядра `.actsContainer`
+        // со слоем 99999, а в правом нижнем стоят постоянные мелочи.
+        this.root.dataset["framePlace"] = "bottom-left";
+        this.root.dataset["frameGroup"] = "first-hint";
         this.root.style.cssText = `
-            position: fixed; right: 16px; bottom: 16px; z-index: 500;
+            position: fixed; left: 16px; bottom: 16px; z-index: 500;
             width: min(340px, calc(100vw - 32px));
             background: var(--panel-background-color, #fff);
             color: var(--foreground-color, #0b1f1a);
             border: 1px solid var(--border-color, #c7d3ce); border-radius: 8px;
             box-shadow: 0 14px 34px -18px rgba(11,31,26,.5);
-            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            font-family: ${FRAME_FONT};
             padding: 18px; display: grid; gap: 8px;
         `;
 
@@ -51,13 +60,13 @@ export class FirstHint {
         this.text.style.cssText = "font-size:14px;line-height:1.5;color:#3d534c";
 
         this.counter = document.createElement("span");
-        this.counter.style.cssText = "font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#4a625b";
+        this.counter.style.cssText = "font-size:12.5px;color:#4a625b";
 
         this.next = document.createElement("button");
         this.next.type = "button";
         this.next.style.cssText = `
-            font: inherit; font-weight: 600; padding: 9px 16px; border-radius: 4px;
-            border: none; background: #0e7a5f; color: #fff; cursor: pointer;
+            font: inherit; font-weight: 600; padding: 9px 16px; border-radius: 6px;
+            min-height: 24px; border: none; background: #0e7a5f; color: #fff; cursor: pointer;
         `;
         this.next.onclick = () => this.advance();
 
@@ -65,8 +74,8 @@ export class FirstHint {
         skip.type = "button";
         skip.textContent = "Пропустить";
         skip.style.cssText = `
-            font: inherit; font-size: 14px; padding: 9px 12px; border-radius: 4px;
-            border: 1px solid var(--border-color, #c7d3ce); background: none;
+            font: inherit; font-size: 14px; padding: 9px 12px; border-radius: 6px;
+            min-height: 24px; border: 1px solid var(--border-color, #c7d3ce); background: none;
             color: #4a625b; cursor: pointer;
         `;
         skip.onclick = () => this.finish();

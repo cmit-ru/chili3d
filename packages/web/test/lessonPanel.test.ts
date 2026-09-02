@@ -22,7 +22,7 @@ describe("Панель шагов урока", () => {
     });
 
     test("клик по заголовку сворачивает и разворачивает список", () => {
-        new LessonPanel(card, "42");
+        new LessonPanel(card, "42", "7");
         const header = document.querySelector("aside button") as HTMLButtonElement;
         const list = document.querySelector("aside ol") as HTMLOListElement;
 
@@ -35,5 +35,29 @@ describe("Панель шагов урока", () => {
         header.click();
         expect(list.hidden).toBe(false);
         expect(list.style.display).toBe("grid");
+    });
+
+    test("панель встаёт первым блоком левой колонки", () => {
+        const sidebar = document.createElement("div");
+        sidebar.id = "editor-sidebar";
+        const tree = document.createElement("div");
+        sidebar.append(tree);
+        document.body.append(sidebar);
+
+        new LessonPanel(card, "42", "7");
+
+        expect(sidebar.firstChild).toBe(document.querySelector("aside"));
+        expect(sidebar.children.length).toBe(2);
+    });
+
+    test("отметки шагов привязаны к ученику, а не только к работе", () => {
+        new LessonPanel(card, "42", "7");
+        const box = document.querySelector("aside input") as HTMLInputElement;
+        box.checked = true;
+        box.dispatchEvent(new Event("change"));
+
+        expect(localStorage.getItem("maketka.lesson.7.42")).toContain('"done":[0]');
+        // Сосед за тем же компьютером чужих галочек не видит.
+        expect(localStorage.getItem("maketka.lesson.8.42")).toBeNull();
     });
 });

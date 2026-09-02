@@ -28,10 +28,12 @@
             flex-direction: row;
             align-items: center;
             justify-self: center;
-            border-radius: 8px;
+            border-radius: 6px;
             padding: 4px 8px;
             margin: 2px;
             cursor: pointer;
+            color: inherit;
+            text-decoration: none;
 
             &:hover {
                 background-color: var(--hover-background-color);
@@ -48,102 +50,36 @@
                 font-weight: bolder;
                 text-wrap: nowrap;
             }
+
+            /* Подпись возврата — спутник знака, а не второй заголовок. */
+            .backLabel {
+                margin-left: 10px;
+                font-weight: normal;
+                font-size: 12.5px;
+                color: var(--foreground-muted-color, #4a625b);
+            }
         }
     }
 
+    /* Каркас растягивается от знака вправо, а не встаёт по центру: имя работы
+       читается как продолжение полосы, а не как заголовок посреди экрана. */
     .center {
         display: flex;
         flex-direction: row;
         align-items: center;
-        margin: auto;
-        flex: 0 1 auto;
-        overflow: auto;
-
-        .views {
-            display: flex;
-            flex-direction: row;
-            align-items: center;
-            border-radius: 8px;
-            padding: 2px 0px;
-            overflow: hidden;
-
-            .tab {
-                display: flex;
-                flex-direction: row;
-                align-items: center;
-                border-radius: 6px;
-                height: 26px;
-                background-color: var(--title-background);
-                padding: 2px;
-                width: 220px;
-                overflow: hidden;
-                margin: 0px 2px;
-                cursor: default;
-                transition: width 0.2s ease-out;
-
-                &:hover {
-                    background-color: var(--hover-background-color);
-                }
-
-                .name {
-                    display: flex;
-                    flex-direction: row;
-                    align-items: center;
-                    margin-right: auto;
-                    margin-left: 8px;
-                    text-wrap: nowrap;
-                    user-select: none;
-                    text-decoration: dashed;
-                    overflow: hidden;
-
-                    .split {
-                        padding: 0px 4px;
-                    }
-
-                    span {
-                        font-size: 12px;
-                    }
-                }
-
-                .close {
-                    width: 12px;
-                    height: 12px;
-                    margin: 4px;
-                    padding: 6px;
-                    border-radius: 6px;
-                    flex-shrink: 0;
-
-                    &:hover {
-                        background-color: var(--hover-background-color);
-                    }
-                }
-            }
-
-            .active {
-                width: 260px;
-                background-color: var(--title-checked);
-            }
-        }
-
-        .new {
-            width: 16px;
-            height: 16px;
-            margin-left: 2px;
-            padding: 6px;
-            border-radius: 6px;
-
-            &:hover {
-                background-color: var(--hover-background-color);
-            }
-        }
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
     }
 
+    /* Блок пользователя — кнопка «аватар + имя», а не иконка 24 px. */
     .right {
         display: flex;
         flex-direction: row;
         align-items: center;
         margin: 2px 8px;
         flex: 0 0 auto;
+        max-width: 40%;
 
         .icon {
             width: 24px;

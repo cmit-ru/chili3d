@@ -13,18 +13,12 @@ rs.mock("../src/ribbon/ribbon.module.css", () => ({
     appIcon: "r-app-icon",
     icon: "r-icon",
     ribbonTitlePanel: "r-ribbon-title-panel",
-    home: "r-home",
+    backLabel: "r-back-label",
     quickCommands: "r-quick-commands",
     split: "r-split",
     tabHeader: "r-tab-header",
     activedTab: "r-actived-tab",
     center: "r-center",
-    views: "r-views",
-    new: "r-new",
-    tab: "r-tab",
-    active: "r-active",
-    name: "r-name",
-    close: "r-close",
     right: "r-right",
     tabContentPanel: "r-tab-content-panel",
     groupPanel: "r-group-panel",
@@ -162,7 +156,24 @@ describe("RibbonUI", () => {
     // ссылка на исходники в оболочке, а не кнопка в ленте команд.
     test("should not render external links", () => {
         const { ui } = createRibbonUI();
-        expect(ui.querySelector("a")).toBeNull();
+        const links = [...ui.querySelectorAll("a")];
+        // Единственная ссылка в шапке — знак «Макетка», и ведёт он внутрь.
+        expect(links.length).toBe(1);
+        for (const link of links) {
+            expect(link.getAttribute("href")?.startsWith("/")).toBe(true);
+        }
+    });
+
+    // Опоры спеки паритета двух мастерских (`frame-contract.md`, «Опоры для
+    // теста»): без них 3D и схемы нечем сверить, а сломать их легко случайной
+    // правкой разметки.
+    test("should mark the frame bar and its four zones", () => {
+        const { ui } = createRibbonUI();
+        expect(ui.querySelectorAll("[data-frame-bar]").length).toBe(1);
+        const zones = [...ui.querySelectorAll("[data-frame-zone]")].map((el) =>
+            el.getAttribute("data-frame-zone"),
+        );
+        expect(zones).toEqual(["знак", "работа", "главное-действие", "человек"]);
     });
 
     test("should render ribbon groups for each tab", () => {
@@ -173,33 +184,34 @@ describe("RibbonUI", () => {
 
     // Домашнего экрана редактора в форке нет вовсе: список работ живёт в
     // кабинете оболочки, а мелькавший «Добро пожаловать…» только сбивал
-    // ребёнка. Клик по значку ведёт в кабинет.
-    test("should open the cabinet when app icon clicked", () => {
+    // ребёнка. Знак — настоящая ссылка, чтобы работали Tab, Enter и средняя
+    // кнопка мыши; куда именно она ведёт, решает сервер (поле `backTo`).
+    test("app icon should be a link to the address the server gave", () => {
+        const globals = globalThis as { MAKETKA_BACK_TO?: unknown };
+        globals.MAKETKA_BACK_TO = { href: "/teach", label: "← К группам" };
+        try {
+            const { ui } = createRibbonUI();
+            const appIcon = mustQuery(ui, ".r-app-icon");
+            expect(appIcon.tagName.toLowerCase()).toBe("a");
+            expect(appIcon.getAttribute("href")).toBe("/teach");
+            expect(mustQuery(ui, ".r-back-label").textContent).toBe("← К группам");
+        } finally {
+            globals.MAKETKA_BACK_TO = undefined;
+        }
+    });
+
+    // Запасной адрес нужен там, где меты нет вовсе: песочница с лендинга и гость.
+    test("app icon should fall back to /home without a server address", () => {
         const { ui } = createRibbonUI();
-        const appIcon = mustQuery(ui, ".r-app-icon");
-        const visited: string[] = [];
-        const location = window.location;
-        Object.defineProperty(window, "location", {
-            configurable: true,
-            value: {
-                ...location,
-                set href(value: string) {
-                    visited.push(value);
-                },
-            },
-        });
-
-        appIcon.click();
-
-        Object.defineProperty(window, "location", { configurable: true, value: location });
-        expect(visited).toEqual(["/projects"]);
+        expect(mustQuery(ui, ".r-app-icon").getAttribute("href")).toBe("/home");
+        expect(ui.querySelector(".r-back-label")).toBeNull();
     });
 
     test("should publish executeCommand when quick command clicked", () => {
         const { ui } = createRibbonUI();
         const titlePanel = mustQuery(ui, ".r-ribbon-title-panel");
-        // children: home svg, quickCommands collection, split span, tab headers collection
-        const quickContainer = titlePanel.children[1] as HTMLElement;
+        // children: quickCommands collection, split span, tab headers collection
+        const quickContainer = titlePanel.children[0] as HTMLElement;
         const quickButton = mustQuery(quickContainer, "span");
         quickButton.click();
         expect(published.some((p) => p.topic === "executeCommand" && p.args[0] === CMD_QUICK)).toBe(true);
@@ -208,7 +220,7 @@ describe("RibbonUI", () => {
     test("should switch activeTab when tab header clicked", () => {
         const { ui, dataContent, tab2 } = createRibbonUI();
         const titlePanel = mustQuery(ui, ".r-ribbon-title-panel");
-        const tabHeaderContainer = titlePanel.children[3] as HTMLElement;
+        const tabHeaderContainer = titlePanel.children[2] as HTMLElement;
         const tabLabels = tabHeaderContainer.querySelectorAll("label");
         expect(tabLabels.length).toBe(2);
 
@@ -216,13 +228,14 @@ describe("RibbonUI", () => {
         expect(dataContent.activeTab).toBe(tab2);
     });
 
-    test("should publish doc.new when new-view button clicked", () => {
+    // Вкладок документов и «+» в шапке больше нет: работа на странице одна, а
+    // «+» заводил документ без номера работы — он никуда не сохранялся и пропадал
+    // вместе с вкладкой. Середина шапки отдана каркасу (имя работы и состояние).
+    test("should not offer a second document in the title bar", () => {
         const { ui } = createRibbonUI();
-        const newBtn = mustQuery(ui, "svg[icon='icon-plus']");
-        // The svg mock stores handlers on `_onclick` regardless of realEvents
-        const onclick = (newBtn as unknown as { _onclick?: () => void })._onclick;
-        expect(onclick).toBeDefined();
-        onclick!();
-        expect(published.some((p) => p.topic === "executeCommand" && p.args[0] === "doc.new")).toBe(true);
+        expect(ui.querySelector("svg[icon='icon-plus']")).toBeNull();
+        const center = mustQuery(ui, ".r-center");
+        expect(center.id).toBe("frame-work");
+        expect(center.children.length).toBe(0);
     });
 });

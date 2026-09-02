@@ -114,9 +114,11 @@ export const DefaultRibbon: RibbonTabProfile[] = [
                 items: ["act.alignCamera"],
             },
             {
-                // Экспорт — последний шаг карточки: «выгрузи STL для печати».
+                // Скачать работу ребёнок теперь может из меню работы («Скачать…»),
+                // и второй двери к тому же действию быть не должно. В ленте осталось
+                // только то, чего в меню нет: добавить в работу готовую чужую деталь.
                 groupName: "ribbon.group.importExport",
-                items: ["file.import", "file.export"],
+                items: ["file.import"],
             },
         ],
     },

@@ -9,23 +9,33 @@
 //     на том же origin, где живёт сессия ребёнка;
 //   • работа открывается сразу по адресу, который передала оболочка, —
 //     домашний экран Chili3D не показывается: он дублировал бы кабинет;
-//   • подключены автосохранение и индикатор состояния.
+//   • подключены автосохранение и каркас мастерской (B-103).
 
 import { AppBuilder } from "@chili3d/builder";
-import { type IApplication, type IDocument, type INodeLinkedList, Serializer } from "@chili3d/core";
+import {
+    type IApplication,
+    type IDocument,
+    type INode,
+    type INodeLinkedList,
+    PubSub,
+    Serializer,
+    VisualNode,
+} from "@chili3d/core";
 import {
     type CloudStorage,
     projectIdFromLocation,
     sandboxFromLocation,
     takeDeferredNodes,
 } from "@chili3d/storage";
-import { SaveIndicator } from "@chili3d/ui";
 import { AiOps } from "./aiOps";
 import { AutoSave } from "./autoSave";
+import { openConflictDialog } from "./conflictDialog";
 import { CoreGuard } from "./coreGuard";
 import { enableEconomyIfNeeded } from "./economy";
+import { subscribeCoreErrors } from "./errorBanner";
 import { Feedback } from "./feedback";
 import { FirstHint } from "./firstHint";
+import { type CopyAnswer, FrameBar } from "./frameBar";
 import { GuestSave } from "./guestSave";
 import { type LessonCard, LessonPanel } from "./lessonPanel";
 import { Loading } from "./loading";
@@ -33,7 +43,6 @@ import { ModelSpinner } from "./modelSpinner";
 import { SandboxNotice } from "./sandboxNotice";
 import { ScreenLock } from "./screenLock";
 import { SourceNotice } from "./sourceNotice";
-import { UserBadge } from "./userBadge";
 import { ViewBanner } from "./viewBanner";
 import { cachedSceneVolumeMm3 } from "./volume";
 
@@ -50,46 +59,143 @@ new SourceNotice();
 // ребёнок видел домашний экран Chili3D, без имени, шагов урока и автосохранения.
 const projectId = projectIdFromLocation;
 
-function attachSaveIndicator(app: IApplication, autoSave: AutoSave) {
-    const storage = app.storage as unknown as CloudStorage;
-    if (typeof storage?.onStateChange !== "function") return;
-
-    const indicator = new SaveIndicator();
-    document.body.appendChild(indicator);
-
-    storage.onStateChange((state, info) => {
-        indicator.setState(state, info);
-        // После расхождения дальше решает ребёнок: продолжать писать поверх
-        // чужой свежей версии нельзя (ТЗ, acceptance 5).
-        if (state === "conflict") autoSave.stop();
-    });
-
-    indicator.onResolveConflict = async (keepMine: boolean) => {
-        const active = app.activeView?.document;
-        const body = active ? active.serialize() : undefined;
-        // Обе ветки сначала сохраняют копию: нажатием работу не потерять.
-        const copy = await storage.saveAsCopy(body);
-        if (keepMine && copy) {
-            // Копия — отдельная работа со своим адресом; доступ к ней оболочка
-            // проверит тем же подзапросом, что и к исходной.
-            window.location.assign(`/3d/${copy.id}`);
-            return;
-        }
-        window.location.reload();
-    };
-}
-
 interface ProjectMeta {
     title?: string;
     card: LessonCard | null;
-    user: { name: string; avatar: string; role: string };
+    user: { id?: number | string; name: string; avatar: string; role: string };
     lockMinutes: number;
+    /** Куда ведёт знак «Макетка»: решает сервер, а не роль (регрессия 31.08). */
+    backTo?: string;
     readOnly?: boolean;
     showHint?: boolean;
     sharedPc?: boolean;
     economyMode?: boolean;
     viewingOthers?: boolean;
+    isExample?: boolean;
     ownerName?: string;
+}
+
+/** Открытая работа: каркас собран раньше неё и спрашивает её через эту ссылку. */
+let currentDoc: IDocument | undefined;
+/** Окна, которые каркас только открывает: заводит их `openProject`. */
+let feedbackWindow: Feedback | undefined;
+let guestWindow: GuestSave | undefined;
+
+/** Подпись возврата рядом со знаком; у запасного `/home` её нет. */
+const BACK_LABELS: Record<string, string> = {
+    "/projects": "← Мои работы",
+    "/projects/examples": "← К примерам",
+    "/teach": "← К группам",
+};
+
+/** Все фигуры работы: «Скачать» берёт работу целиком, выделение не требуется. */
+function allVisualNodes(doc: IDocument): VisualNode[] {
+    const found: VisualNode[] = [];
+    const walk = (node: INode | undefined) => {
+        let current = node;
+        while (current) {
+            if (current instanceof VisualNode) found.push(current);
+            const child = (current as { firstChild?: INode }).firstChild;
+            if (child) walk(child);
+            current = current.nextSibling;
+        }
+    };
+    walk(doc.modelManager.rootNode.firstChild);
+    return found;
+}
+
+/** «Сделать копию», «Забрать себе» и кнопка плашки просмотра — одна ручка. */
+async function copyWork(id: string): Promise<CopyAnswer> {
+    try {
+        const response = await fetch(`/api/projects/${id}/copy`, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { Accept: "application/json" },
+        });
+        const answer = (await response.json().catch(() => null)) as {
+            id?: number;
+            title?: string;
+            message?: string;
+        } | null;
+        // 409 — упёрлись в предел числа работ. Текст отказа пишет сервер: там
+        // сказано, сколько работ и что с ними делать.
+        if (response.status === 409 && answer?.message) return { refused: answer.message };
+        if (!response.ok || !answer?.id) return null;
+        // Номер работы приезжает строкой (`bigserial` + драйвер `pg`): приводим
+        // сразу, чтобы дальше его можно было сравнивать с номером из адреса.
+        return { id: Number(answer.id), title: answer.title ?? "Копия" };
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Каркас собирается до открытия работы: полоса с именем и состоянием должна
+ * стоять на месте, даже если работа откроется не сразу или не откроется вовсе.
+ * Всё, что зависит от документа, каркас спрашивает через `currentDoc`.
+ */
+function mountFrame(app: IApplication, autoSave: AutoSave, meta: ProjectMeta | null): FrameBar {
+    const id = projectId();
+    const sandbox = !id && sandboxFromLocation();
+    const storage = app.storage as unknown as CloudStorage;
+    const viewing = Boolean(meta?.viewingOthers || meta?.isExample);
+
+    const frame = new FrameBar({
+        projectId: id,
+        // В песочнице работы ещё нет — и имени у неё нет тоже.
+        title: sandbox ? "Проба" : (meta?.title ?? "Моя работа"),
+        user: meta?.user ?? null,
+        viewing,
+        isExample: Boolean(meta?.isExample),
+        sandbox,
+        sharedPc: Boolean(meta?.sharedPc),
+        saveNow: async () => {
+            if (currentDoc) await autoSave.saveNow(currentDoc);
+        },
+        hasPending: () => autoSave.hasPending(),
+        openConflict: (info) =>
+            openConflictDialog({
+                info,
+                // Обе ветки сначала сохраняют копию: нажатием работу не потерять.
+                saveCopy: () => storage.saveAsCopy(currentDoc?.serialize()),
+            }),
+        copy: id ? () => copyWork(id) : undefined,
+        // Имя живёт ещё и в теле работы: переносим туда ответ сервера.
+        applyTitle: (title) => {
+            if (currentDoc) currentDoc.name = title;
+        },
+        feedback: () => feedbackWindow?.open(),
+        guestSave: () => guestWindow?.open("register"),
+        download: {
+            workTitle: () => currentDoc?.name ?? meta?.title ?? "Работа",
+            selectedCount: () => app.activeView?.document.selection.getSelectedNodeLength() ?? 0,
+            exportModel: async (type, onlySelected) => {
+                const doc = app.activeView?.document;
+                if (!doc) return undefined;
+                const nodes = onlySelected ? doc.selection.getSelectedVisualNodes() : allVisualNodes(doc);
+                if (nodes.length === 0) return undefined;
+                return app.dataExchange.export(type, nodes);
+            },
+            screenshot: () => app.activeView?.toImage(),
+            workFile: () => (currentDoc ? JSON.stringify(currentDoc.serialize()) : undefined),
+        },
+    });
+
+    if (typeof storage?.onStateChange === "function") {
+        storage.onStateChange((state, info) => {
+            frame.setSaveState(state, info);
+            // После расхождения дальше решает ребёнок: продолжать писать поверх
+            // чужой свежей версии нельзя (ТЗ, acceptance 5).
+            if (state === "conflict") autoSave.stop();
+        });
+    }
+
+    // Знак «Макетка» — обычная ссылка, но уход через неё тоже сначала досылает
+    // правки: одно правило на все двери.
+    const sign = document.querySelector<HTMLAnchorElement>('a[data-frame-zone="знак"]');
+    if (sign) frame.guardLink(sign);
+
+    return frame;
 }
 
 async function fetchMeta(id: string): Promise<ProjectMeta | null> {
@@ -109,7 +215,8 @@ async function fetchMeta(id: string): Promise<ProjectMeta | null> {
  */
 async function openSandbox(app: IApplication, spinner?: ModelSpinner) {
     let doc = await app.openDocument("sandbox").catch(() => undefined);
-    if (!doc) doc = await app.newDocument("Моя модель");
+    if (!doc) doc = await app.newDocument("Проба");
+    currentDoc = doc;
 
     // Собранное в песочнице можно забрать себе, не уходя со страницы (B-096):
     // регистрация и вход происходят в оверлее поверх мастерской, а сцена
@@ -117,6 +224,8 @@ async function openSandbox(app: IApplication, spinner?: ModelSpinner) {
     // теряли её вместе со страницей.
     const scene = doc;
     const guest = new GuestSave({ scene: () => scene.serialize() });
+    // Тот же оверлей открывает пункт «Сохранить работу» в меню работы.
+    guestWindow = guest;
     const notice = new SandboxNotice({
         onSave: () => guest.open("register"),
         onLogin: () => guest.open("login"),
@@ -163,6 +272,7 @@ async function openProject(
     app: IApplication,
     autoSave: AutoSave,
     earlyMeta: ProjectMeta | null,
+    frame: FrameBar,
     spinner?: ModelSpinner,
 ) {
     const id = projectId();
@@ -185,6 +295,10 @@ async function openProject(
         doc = await app.newDocument(meta?.title ?? "Моя работа");
         await doc.save();
     }
+    // Источник правды имени — `projects.title` в оболочке: тело работы могло
+    // остаться со старым именем, переименование туда не переносится.
+    if (meta?.title) doc.name = meta.title;
+    currentDoc = doc;
 
     // Чужая работа открывается в просмотре: автосохранение включается только
     // после явного «Править» — случайная перезапись детской работы невозможна.
@@ -203,41 +317,28 @@ async function openProject(
     if (meta?.viewingOthers) {
         new ViewBanner({
             ownerName: meta.ownerName || "ученик",
+            isExample: meta.isExample,
             canEdit: !meta.readOnly,
             onEdit: () => {
                 editingEnabled = true;
+                frame.startEditing();
                 startSaving();
                 sendGrant();
                 window.setInterval(sendGrant, 5 * 60_000);
             },
             onCopy: async () => {
-                try {
-                    const response = await fetch(`/api/projects/${id}/copy`, {
-                        method: "POST",
-                        credentials: "same-origin",
-                    });
-                    if (!response.ok) return null;
-                    return ((await response.json()) as { id: number }).id;
-                } catch {
-                    return null;
-                }
+                const answer = await copyWork(id);
+                return answer && "id" in answer ? answer.id : null;
             },
         });
     } else {
         startSaving();
     }
 
-    if (meta?.user) {
-        new UserBadge({
-            name: meta.user.name,
-            avatar: meta.user.avatar,
-            role: meta.user.role,
-            readOnly: Boolean(meta.readOnly),
-            sharedPc: Boolean(meta.sharedPc),
-        });
-    }
     if (meta?.card?.steps?.length) {
-        new LessonPanel(meta.card, id);
+        // Ключ отметок привязан к ученику: на общем компьютере класса следующий
+        // ребёнок не должен видеть чужие галочки.
+        new LessonPanel(meta.card, id, String(meta.user?.id ?? "гость"));
     }
     // Первый вход: три шага «куда нажимать». Отметку ставим сразу по закрытию —
     // если запрос не дошёл, подсказка повторится, и это лучше, чем потерять её.
@@ -289,7 +390,8 @@ async function openProject(
     // «Открытым кодом». Гостю кнопку не показываем — отзыв привязан к учётке,
     // иначе его нечем ограничить от потока и некому отвечать.
     if (meta?.user) {
-        new Feedback({
+        // Тот же отзыв открывает пункт «Что-то не так?» в меню человека.
+        feedbackWindow = new Feedback({
             projectId: id,
             // Роль отправителя пишет оболочка по сессии — слову клиента тут веры нет.
             context: () => ({
@@ -317,8 +419,18 @@ async function openProject(
 }
 
 async function handleApplicaionBuilt(app: IApplication, earlyMeta: ProjectMeta | null) {
+    // Системное окно браузера «Изменения могут не сохраниться» ставит апстримный
+    // `app/src/application.ts:85` — и показывает его всегда, даже когда всё
+    // сохранено. Оно пугает ребёнка чужими словами и приучает нажимать «Уйти»,
+    // не читая; про несохранённое у нас говорит каркас своими словами.
+    window.onbeforeunload = null;
+
+    // Ошибки ядра — баннером с крестиком, а не тостом на три секунды: тост
+    // уезжает раньше, чем ребёнок успевает прочитать, что не построилось.
+    subscribeCoreErrors(PubSub.default);
+
     const autoSave = new AutoSave(app);
-    attachSaveIndicator(app, autoSave);
+    const frame = mountFrame(app, autoSave, earlyMeta);
 
     // Мастерская уже собрана — показываем её, а ожидание модели переносим на
     // накладку со спиннером. Раньше экран загрузки держался до готовности сцены,
@@ -332,7 +444,7 @@ async function handleApplicaionBuilt(app: IApplication, earlyMeta: ProjectMeta |
     await nextFrame();
 
     try {
-        await openProject(app, autoSave, earlyMeta, spinner);
+        await openProject(app, autoSave, earlyMeta, frame, spinner);
     } catch (error) {
         console.warn("[project]", error);
     }
@@ -347,6 +459,15 @@ const earlyMeta: Promise<ProjectMeta | null> = (async () => {
     const id = projectId();
     const meta = id ? await fetchMeta(id) : null;
     enableEconomyIfNeeded(Boolean(meta?.economyMode));
+    // Куда ведёт знак «Макетка» — знает лента, а она собирается вместе с
+    // приложением. Поэтому адрес кладём в глобальную переменную до сборки:
+    // пакет `ui` про нашу оболочку не знает и знать не должен.
+    if (meta?.backTo) {
+        (globalThis as { MAKETKA_BACK_TO?: { href: string; label?: string } }).MAKETKA_BACK_TO = {
+            href: meta.backTo,
+            label: BACK_LABELS[meta.backTo],
+        };
+    }
     return meta;
 })();
 

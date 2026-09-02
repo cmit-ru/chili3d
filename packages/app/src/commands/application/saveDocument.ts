@@ -1,7 +1,7 @@
 // Part of the Chili3d Project, under the AGPL-3.0 License.
 // See LICENSE file in the project root for full license information.
 
-import { command, I18n, type IApplication, type ICommand, PubSub } from "@chili3d/core";
+import { command, type IApplication, type ICommand } from "@chili3d/core";
 
 @command({
     key: "doc.save",
@@ -9,16 +9,14 @@ import { command, I18n, type IApplication, type ICommand, PubSub } from "@chili3
     isApplicationCommand: true,
 })
 export class SaveDocument implements ICommand {
+    // Форк «Макетки»: сохранение молчит. Раньше оно вешало на весь экран
+    // накладку «Выполняется…» и потом тост «Документ сохранён» — при
+    // автосохранении раз в несколько секунд это мигало бы ребёнку в лицо
+    // посреди работы. Состояние сохранения теперь живёт в одном месте — в
+    // полосе сверху, рядом с именем работы. Сообщать нужно только о беде,
+    // а о норме — тихо показывать словом «Сохранено».
     async execute(app: IApplication): Promise<void> {
         if (!app.activeView?.document) return;
-        PubSub.default.pub(
-            "showPermanent",
-            async () => {
-                await app.activeView?.document.save();
-                PubSub.default.pub("showToast", "toast.document.saved");
-            },
-            "toast.excuting{0}",
-            I18n.translate("command.doc.save"),
-        );
+        await app.activeView.document.save();
     }
 }

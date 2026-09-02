@@ -55,6 +55,10 @@ function applyProps(el: HTMLElement, props: any, opts: ElementMockOptions): void
     if (props.href) (el as HTMLAnchorElement).href = String(props.href);
     if (props.target) (el as HTMLAnchorElement).target = String(props.target);
     if (props.style) Object.assign(el.style, props.style);
+    // Настоящий `setProperties` заходит внутрь объектных свойств, поэтому
+    // `dataset: { frameBar: "" }` превращается в атрибут `data-frame-bar`.
+    // Опоры спеки паритета объявлены именно так — мок обязан их доносить.
+    if (props.dataset && typeof props.dataset === "object") Object.assign(el.dataset, props.dataset);
     for (const name of EVENT_PROPS) {
         if (!props[name]) continue;
         // biome-ignore lint/suspicious/noExplicitAny: test mock

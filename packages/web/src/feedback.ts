@@ -15,6 +15,8 @@
 // Контракт оболочки — cad-app `src/routes/feedback.js`:
 //   POST /api/feedback { editor, kind, message, projectId, context, shot } → { ok } | 429 { message }
 
+import { FRAME_FONT } from "./errorBanner";
+
 const ВИДЫ: [string, string][] = [
     ["broken", "Что-то сломалось"],
     ["hard", "Неудобно"],
@@ -58,7 +60,7 @@ const PANEL = `
     position: fixed; inset: 0; z-index: 1200; display: flex;
     align-items: center; justify-content: center; padding: 16px;
     background: rgba(11,31,26,.45);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-family: ${FRAME_FONT};
 `;
 
 const CARD = `
@@ -102,21 +104,17 @@ export class Feedback {
         this.button.textContent = "Что-то не так?";
         this.button.title = "Рассказать нам, что не работает или чего не хватает";
         this.button.setAttribute("data-fb-open", "");
-        // Над «Открытым кодом» (right:12 bottom:8) — в том же углу и так же тихо.
+        this.button.dataset["framePlace"] = "bottom-right";
+        this.button.dataset["frameGroup"] = "corner-notices";
+        // Над «Открытым кодом» (right:12 bottom:8) — в том же углу и той же
+        // группой. Прозрачности нет: постоянная мелочь обязана читаться в
+        // обычном состоянии, а не при наведении (INV-010).
         this.button.style.cssText = `
-            position: fixed; right: 12px; bottom: 30px; z-index: 300;
-            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-            font-size: 12px; padding: 4px 9px; border-radius: 6px; cursor: pointer;
-            border: 1px solid var(--border-color, #c7d3ce);
-            background: var(--panel-background-color, #fff);
-            color: var(--foreground-color, #4a625b); opacity: .7;
+            position: fixed; right: 12px; bottom: 38px; z-index: 300;
+            font-family: ${FRAME_FONT};
+            font-size: 12.5px; padding: 5px 8px; border-radius: 6px; cursor: pointer;
+            min-height: 24px; border: 1px solid #c7d3ce; background: #fff; color: #4a625b;
         `;
-        this.button.onmouseenter = () => {
-            this.button.style.opacity = "1";
-        };
-        this.button.onmouseleave = () => {
-            this.button.style.opacity = ".7";
-        };
         this.button.onclick = () => this.open();
         document.body.appendChild(this.button);
     }

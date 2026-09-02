@@ -22,7 +22,11 @@ import { showFloatPanel } from "./floatPanel";
 import { Permanent } from "./permanent";
 import { Toast } from "./toast";
 
-const quickCommands: CommandKeys[] = ["doc.save", "doc.saveToFile", "edit.undo", "edit.redo"];
+// Форк «Макетки»: у одного действия — одна дверь. «Сохранить сейчас» и
+// «Скачать… → Файл работы» живут в меню работы, поэтому дискета `doc.save` и
+// `doc.saveToFile` из быстрых команд убраны: рядом с работающим автосохранением
+// дискета читается как «значит, само не сохраняется».
+const quickCommands: CommandKeys[] = ["edit.undo", "edit.redo"];
 
 export class MainWindow extends HTMLElement implements IWindow {
     readonly ribbon: Ribbon;

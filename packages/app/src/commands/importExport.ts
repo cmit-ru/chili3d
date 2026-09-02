@@ -6,7 +6,6 @@ import {
     CancelableCommand,
     Combobox,
     command,
-    DOCUMENT_FILE_EXTENSION,
     download,
     I18n,
     type IApplication,
@@ -25,14 +24,21 @@ import {
 })
 export class Import implements ICommand {
     async execute(application: IApplication): Promise<void> {
-        // Файл своей работы (`.cd`) ребёнок ищет там, где написано «Импорт», —
-        // другой кнопки «открыть файл» на ленте нет. Принимаем его здесь и
-        // отдаём приложению: оно уведёт `.cd` в ветку «открыть документ»,
-        // а STEP/STL — в текущую сцену (форк «Макетки», B-093).
-        const extenstions = [DOCUMENT_FILE_EXTENSION, ...application.dataExchange.importFormats()].join(",");
+        // Только чужие детали (STEP/STL и прочие форматы обмена). Файл работы
+        // (`.cd`) отсюда убран: приложение уводило его в ветку «открыть
+        // документ», и на экране появлялась вторая работа без номера — она
+        // никуда не сохранялась и пропадала вместе с вкладкой. Свои работы
+        // открываются через «Открыть другую работу» в меню работы, где у
+        // каждой есть номер и облако.
+        const extenstions = application.dataExchange.importFormats().join(",");
         const files = await readFilesAsync(extenstions, true);
         if (!files.isOk || files.value.length === 0) {
-            alert(files.error);
+            // «cancel» — ребёнок сам закрыл окно выбора файла; это не беда и
+            // говорить тут не о чем. Остальное показываем полосой сверху
+            // словами ребёнка, а не системным `alert` с английским текстом.
+            if (files.error !== "cancel") {
+                PubSub.default.pub("displayError", "Не получилось открыть файл. Попробуй ещё раз");
+            }
             return;
         }
         application.importFiles(files.value);
