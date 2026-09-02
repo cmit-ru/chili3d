@@ -7,13 +7,24 @@
 // сохраняется (решение владельца 2026-08-31: следующий посетитель должен
 // увидеть нетронутый образец, «хочешь сохранять — регистрируйся»).
 // Попытка сохранить подсвечивает баннер вместо тихой потери.
+//
+// Забрать собранное можно, не уходя со страницы: обе кнопки открывают оверлей
+// (B-096). Раньше здесь стояли ссылки на /auth/register и /login — уход по ним
+// закрывал мастерскую вместе со сценой, и собранное пропадало (находка Ш-4).
+
+export interface SandboxNoticeOptions {
+    /** «Сохранить работу»: оверлей регистрации поверх мастерской. */
+    onSave: () => void;
+    /** «Войти»: тот же оверлей, вкладка входа. */
+    onLogin: () => void;
+}
 
 export class SandboxNotice {
     private readonly root: HTMLElement;
     private readonly text: HTMLElement;
     private nudged = false;
 
-    constructor() {
+    constructor(private readonly options: SandboxNoticeOptions) {
         this.root = document.createElement("div");
         // Правый верхний угол — место блока пользователя (UserBadge): в песочнице
         // он не создаётся, и угол свободен. По центру плашка ложилась на ленту и
@@ -39,18 +50,20 @@ export class SandboxNotice {
         this.text.textContent = "Песочница: не сохраняется";
         this.root.appendChild(this.text);
 
-        const register = document.createElement("a");
-        register.href = "/auth/register";
-        register.textContent = "Зарегистрироваться";
-        register.style.cssText = `font: inherit; font-weight: 600; padding: 3px 9px; border-radius: 4px;
-            background: #1c6dbd; color: #fff; text-decoration: none; white-space: nowrap;`;
-        this.root.appendChild(register);
+        const save = document.createElement("button");
+        save.type = "button";
+        save.textContent = "Сохранить работу";
+        save.style.cssText = `font: inherit; font-weight: 600; padding: 3px 9px; border-radius: 4px;
+            border: none; background: #1c6dbd; color: #fff; cursor: pointer; white-space: nowrap;`;
+        save.onclick = () => this.options.onSave();
+        this.root.appendChild(save);
 
-        const login = document.createElement("a");
-        login.href = "/login";
+        const login = document.createElement("button");
+        login.type = "button";
         login.textContent = "Войти";
-        login.style.cssText = `font: inherit; padding: 3px 9px; border-radius: 4px;
-            border: 1px solid #1c6dbd; color: #114a83; text-decoration: none; white-space: nowrap;`;
+        login.style.cssText = `font: inherit; padding: 3px 9px; border-radius: 4px; cursor: pointer;
+            border: 1px solid #1c6dbd; background: none; color: #114a83; white-space: nowrap;`;
+        login.onclick = () => this.options.onLogin();
         this.root.appendChild(login);
 
         document.body.appendChild(this.root);
@@ -60,8 +73,9 @@ export class SandboxNotice {
     nudge() {
         if (!this.nudged) {
             this.nudged = true;
-            // Текст той же длины, что и обычный: плашка обязана остаться в одну строку.
-            this.text.textContent = "Сохранять — после регистрации";
+            // Текст той же длины, что и обычный: плашка обязана остаться в одну
+            // строку. И указывает он теперь на кнопку рядом, а не на чужую страницу.
+            this.text.textContent = "Чтобы не потерять — сохраните:";
         }
         this.root.style.transform = "scale(1.06)";
         window.setTimeout(() => {

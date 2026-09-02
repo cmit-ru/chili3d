@@ -25,6 +25,7 @@ import { AutoSave } from "./autoSave";
 import { CoreGuard } from "./coreGuard";
 import { enableEconomyIfNeeded } from "./economy";
 import { FirstHint } from "./firstHint";
+import { GuestSave } from "./guestSave";
 import { type LessonCard, LessonPanel } from "./lessonPanel";
 import { Loading } from "./loading";
 import { ModelSpinner } from "./modelSpinner";
@@ -109,7 +110,16 @@ async function openSandbox(app: IApplication, spinner?: ModelSpinner) {
     let doc = await app.openDocument("sandbox").catch(() => undefined);
     if (!doc) doc = await app.newDocument("Моя модель");
 
-    const notice = new SandboxNotice();
+    // Собранное в песочнице можно забрать себе, не уходя со страницы (B-096):
+    // регистрация и вход происходят в оверлее поверх мастерской, а сцена
+    // уезжает на сервер тем же движением. Ссылки, уводившие на /auth/register,
+    // теряли её вместе со страницей.
+    const scene = doc;
+    const guest = new GuestSave({ scene: () => scene.serialize() });
+    const notice = new SandboxNotice({
+        onSave: () => guest.open("register"),
+        onLogin: () => guest.open("login"),
+    });
     const storage = app.storage as unknown as CloudStorage;
     if (storage) storage.onSandboxSave = () => notice.nudge();
 
