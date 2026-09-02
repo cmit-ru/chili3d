@@ -64,8 +64,9 @@ interface ProjectMeta {
     card: LessonCard | null;
     user: { id?: number | string; name: string; avatar: string; role: string };
     lockMinutes: number;
-    /** Куда ведёт знак «Макетка»: решает сервер, а не роль (регрессия 31.08). */
-    backTo?: string;
+    /** Куда ведёт знак «Макетка»: решает сервер, а не роль (регрессия 31.08).
+     *  Сервер шлёт адрес вместе с подписью — той же, что видит мастерская схем. */
+    backTo?: { href: string; label?: string };
     readOnly?: boolean;
     showHint?: boolean;
     sharedPc?: boolean;
@@ -80,13 +81,6 @@ let currentDoc: IDocument | undefined;
 /** Окна, которые каркас только открывает: заводит их `openProject`. */
 let feedbackWindow: Feedback | undefined;
 let guestWindow: GuestSave | undefined;
-
-/** Подпись возврата рядом со знаком; у запасного `/home` её нет. */
-const BACK_LABELS: Record<string, string> = {
-    "/projects": "← Мои работы",
-    "/projects/examples": "← К примерам",
-    "/teach": "← К группам",
-};
 
 /** Все фигуры работы: «Скачать» берёт работу целиком, выделение не требуется. */
 function allVisualNodes(doc: IDocument): VisualNode[] {
@@ -462,11 +456,8 @@ const earlyMeta: Promise<ProjectMeta | null> = (async () => {
     // Куда ведёт знак «Макетка» — знает лента, а она собирается вместе с
     // приложением. Поэтому адрес кладём в глобальную переменную до сборки:
     // пакет `ui` про нашу оболочку не знает и знать не должен.
-    if (meta?.backTo) {
-        (globalThis as { MAKETKA_BACK_TO?: { href: string; label?: string } }).MAKETKA_BACK_TO = {
-            href: meta.backTo,
-            label: BACK_LABELS[meta.backTo],
-        };
+    if (meta?.backTo?.href) {
+        (globalThis as { MAKETKA_BACK_TO?: { href: string; label?: string } }).MAKETKA_BACK_TO = meta.backTo;
     }
     return meta;
 })();

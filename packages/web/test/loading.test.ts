@@ -52,8 +52,10 @@ describe("Экран загрузки мастерской", () => {
         // Технический текст оставляем — он для преподавателя.
         expect(el.textContent).toContain("out of memory");
 
+        // Экран ошибки не знает роли: мастерская не загрузилась, данных работы нет.
+        // `/home` — общая дверь на сервере, она уводит по роли (B-097).
         const back = el.querySelector("a");
-        expect(back?.getAttribute("href")).toBe("/projects");
+        expect(back?.getAttribute("href")).toBe("/home");
     });
 
     test("dispose можно звать дважды", () => {
