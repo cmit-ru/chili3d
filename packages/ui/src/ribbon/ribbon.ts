@@ -119,13 +119,15 @@ export class RibbonUI extends HTMLElement {
         return div(
             { className: style.left },
             // Форк «Макетки»: имя продукта берётся из настроек оболочки, а клик
-            // ведёт в кабинет с работами. Домашний экран редактора скрыт —
-            // список работ живёт в кабинете, и второй такой же только путает.
+            // ведёт домой. Домашний экран редактора скрыт — список работ живёт в
+            // кабинете, и второй такой же только путает. Куда именно «домой»,
+            // решает оболочка по роли (`/home`, B-097): ученику — его работы,
+            // преподавателю — группы, гостю — лендинг, а не чужой экран ввода кода.
             div(
                 {
                     className: style.appIcon,
                     onclick: () => {
-                        window.location.href = "/projects";
+                        window.location.href = "/home";
                     },
                 },
                 svg({ className: style.icon, icon: "icon-chili" }),
@@ -133,13 +135,6 @@ export class RibbonUI extends HTMLElement {
             ),
             div(
                 { className: style.ribbonTitlePanel },
-                svg({
-                    className: style.home,
-                    icon: "icon-home",
-                    onclick: () => {
-                        window.location.href = "/projects";
-                    },
-                }),
                 collection({
                     className: style.quickCommands,
                     sources: this.dataContent.quickCommands,

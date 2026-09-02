@@ -48,9 +48,12 @@ export class UserBadge {
         name.textContent = this.options.name;
         name.style.fontWeight = "600";
 
+        // Куда «домой» — решает оболочка по роли (`/home`, B-097). Здесь стояло
+        // «всем, кроме ученика, — в кабинет преподавателя», и внешнего человека
+        // это уводило в чужой кабинет (находка Ш-8).
         const works = document.createElement("a");
-        works.href = this.options.role === "student" ? "/projects" : "/teach";
-        works.textContent = "Мои работы";
+        works.href = "/home";
+        works.textContent = this.options.role === "teacher" ? "К группам" : "Мои работы";
         works.style.cssText = "color:#0e7a5f;text-decoration:none;font-weight:600";
 
         // «Передать компьютер» — только в режиме общего компьютера класса

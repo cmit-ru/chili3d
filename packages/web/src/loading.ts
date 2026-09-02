@@ -85,8 +85,8 @@ export class Loading extends HTMLElement {
         retry.onclick = () => window.location.reload();
 
         const back = document.createElement("a");
-        back.href = "/projects";
-        back.textContent = "Вернуться к моим работам";
+        back.href = "/home";
+        back.textContent = "Вернуться назад";
         back.style.cssText = "color:#4a625b;font-size:14px";
 
         // Технический текст оставляем мелким: он для преподавателя, не для ребёнка.

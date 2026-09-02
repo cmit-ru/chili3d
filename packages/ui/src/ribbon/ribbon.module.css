@@ -165,18 +165,6 @@
     margin: 0px 4px;
     flex: 0 0 auto;
 
-    .home {
-        width: 14px;
-        height: 14px;
-        padding: 6px;
-        border-radius: 4px;
-        margin: 0px 4px;
-
-        &:hover {
-            background-color: var(--hover-background-color);
-        }
-    }
-
     & .quickCommands {
         display: flex;
         flex-direction: row;
