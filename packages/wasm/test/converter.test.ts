@@ -178,7 +178,8 @@ describe("STL conversion", () => {
         const text = new TextDecoder().decode(result.value);
         expect(text.startsWith("solid")).toBe(true);
         expect(text).toContain("facet normal");
-        expect(text.trimEnd().endsWith("endsolid chili3d")).toBe(true);
+        // Имя по умолчанию — наше: работа ребёнка подписана «maketka» (см. stlWriter.ts).
+        expect(text.trimEnd().endsWith("endsolid maketka")).toBe(true);
     });
 
     test("ASCII STL uses the provided solid name", () => {
