@@ -289,12 +289,11 @@ async function openProject(
     // «Открытым кодом». Гостю кнопку не показываем — отзыв привязан к учётке,
     // иначе его нечем ограничить от потока и некому отвечать.
     if (meta?.user) {
-        const role = meta.user.role;
         new Feedback({
             projectId: id,
+            // Роль отправителя пишет оболочка по сессии — слову клиента тут веры нет.
             context: () => ({
                 rev: storage?.currentRevision?.(id) ?? 0,
-                роль: role,
                 карточка: meta?.card?.title ?? "",
             }),
             // 700 px: рендерер отдаёт JPEG, как только кадр крупнее, — иначе

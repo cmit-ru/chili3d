@@ -13,7 +13,7 @@ interface Отправленное {
     message: string;
     projectId: number | null;
     shot: string | null;
-    context: { rev: number; роль: string; версия: string; ошибки: string[] };
+    context: { rev: number; карточка: string; версия: string; ошибки: string[] };
 }
 
 const запросы: { url: string; body: Отправленное }[] = [];
@@ -49,7 +49,7 @@ describe("Отзыв из мастерской", () => {
     const открыть = () => {
         new Feedback({
             projectId: "42",
-            context: () => ({ rev: 5, роль: "student", карточка: "Брелок" }),
+            context: () => ({ rev: 5, карточка: "Брелок" }),
             shot: () => "data:image/jpeg;base64,AAAA",
         });
         (document.querySelector("[data-fb-open]") as HTMLButtonElement).click();
@@ -90,7 +90,7 @@ describe("Отзыв из мастерской", () => {
         expect(body.projectId).toBe(42);
         expect(body.shot).toBe("data:image/jpeg;base64,AAAA");
         expect(body.context.rev).toBe(5);
-        expect(body.context.роль).toBe("student");
+        expect(body.context.карточка).toBe("Брелок");
         expect(body.context.версия).toBe("f77f4174e782");
         expect(Array.isArray(body.context.ошибки)).toBe(true);
     });
