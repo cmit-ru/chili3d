@@ -6,6 +6,7 @@ import {
     CancelableCommand,
     Combobox,
     command,
+    DOCUMENT_FILE_EXTENSION,
     download,
     I18n,
     type IApplication,
@@ -17,7 +18,6 @@ import {
     SelectNodeStep,
     type VisualNode,
 } from "@chili3d/core";
-import { importFiles } from "../utils";
 
 @command({
     key: "file.import",
@@ -25,13 +25,17 @@ import { importFiles } from "../utils";
 })
 export class Import implements ICommand {
     async execute(application: IApplication): Promise<void> {
-        const extenstions = application.dataExchange.importFormats().join(",");
+        // Файл своей работы (`.cd`) ребёнок ищет там, где написано «Импорт», —
+        // другой кнопки «открыть файл» на ленте нет. Принимаем его здесь и
+        // отдаём приложению: оно уведёт `.cd` в ветку «открыть документ»,
+        // а STEP/STL — в текущую сцену (форк «Макетки», B-093).
+        const extenstions = [DOCUMENT_FILE_EXTENSION, ...application.dataExchange.importFormats()].join(",");
         const files = await readFilesAsync(extenstions, true);
         if (!files.isOk || files.value.length === 0) {
             alert(files.error);
             return;
         }
-        importFiles(application, files.value);
+        application.importFiles(files.value);
     }
 }
 

@@ -91,7 +91,7 @@ export default {
         "command.doc.new": "Новый документ",
         "command.doc.open": "Открыть документ",
         "command.doc.save": "Сохранить документ",
-        "command.doc.saveToFile": "Сохранить в файл",
+        "command.doc.saveToFile": "Скачать работу файлом .cd (открыть — кнопкой «Импорт»)",
         "command.edit.redo": "Вернуть",
         "command.edit.undo": "Откатить",
         "command.file.export": "Экспорт",

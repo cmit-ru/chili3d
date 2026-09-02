@@ -52,6 +52,29 @@ describe("Import", () => {
         expect(typeof cmd.execute).toBe("function");
     });
 
+    // Форк «Макетки», B-093: файл своей работы ребёнок несёт в «Импорт» — другой
+    // кнопки «открыть файл» на ленте нет. Раньше диалог его даже не показывал.
+    test("диалог принимает .cd и отдаёт файл приложению", async () => {
+        const app = createMockApplication();
+        app.dataExchange.importFormats = () => [".step", ".stl"];
+        let passed: File[] | FileList | undefined;
+        app.importFiles = async (files) => {
+            passed = files;
+        };
+
+        const running = new Import().execute(app);
+        const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+        expect(input.accept.split(",")).toContain(".cd");
+
+        const dt = new DataTransfer();
+        dt.items.add(new File(["{}"], "работа.cd"));
+        input.files = dt.files;
+        input.dispatchEvent(new Event("change"));
+        await running;
+
+        expect(Array.from(passed as FileList).map((f) => f.name)).toEqual(["работа.cd"]);
+    });
+
     test("should handle empty file list gracefully via alert", async () => {
         // When readFilesAsync returns empty files, Import shows an alert.
         // We verify the command can be constructed and has proper metadata.

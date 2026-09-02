@@ -15,14 +15,18 @@ export class SandboxNotice {
 
     constructor() {
         this.root = document.createElement("div");
+        // Правый верхний угол — место блока пользователя (UserBadge): в песочнице
+        // он не создаётся, и угол свободен. По центру плашка ложилась на ленту и
+        // закрывала команды (отчёт владельца 02.09).
         this.root.style.cssText = `
-            position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 460;
+            position: fixed; top: 8px; right: 12px; z-index: 460;
             display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+            justify-content: flex-end;
             padding: 8px 12px; border-radius: 6px;
             background: #e8f4fd; border: 1px solid #1c6dbd; color: #114a83;
             font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-            font-size: 13.5px; max-width: min(680px, calc(100vw - 24px));
-            transition: transform .15s ease;
+            font-size: 13.5px; max-width: min(520px, calc(100vw - 24px));
+            transform-origin: top right; transition: transform .15s ease;
         `;
 
         this.text = document.createElement("span");
@@ -52,9 +56,9 @@ export class SandboxNotice {
             this.nudged = true;
             this.text.textContent = "Чтобы сохранять свои модели — зарегистрируйтесь, это бесплатно.";
         }
-        this.root.style.transform = "translateX(-50%) scale(1.06)";
+        this.root.style.transform = "scale(1.06)";
         window.setTimeout(() => {
-            this.root.style.transform = "translateX(-50%)";
+            this.root.style.transform = "";
         }, 180);
     }
 }

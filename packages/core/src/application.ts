@@ -26,6 +26,12 @@ export interface IApplication extends IPropertyChanged {
     newDocument(name: string): Promise<IDocument>;
     openDocument(id: string): Promise<IDocument | undefined>;
     loadDocument(data: Serialized): Promise<IDocument | undefined>;
+    /**
+     * Разложить принесённые файлы: `.cd` — это целый документ, его открывают,
+     * остальное — модель в текущую сцену. Одна точка разбора на перетаскивание
+     * и на диалог «Импорт», иначе они расходятся (форк «Макетки», B-093).
+     */
+    importFiles(files: File[] | FileList | undefined): Promise<void>;
 }
 
 let currentApplication: IApplication;

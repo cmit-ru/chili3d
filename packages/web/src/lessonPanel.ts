@@ -84,6 +84,10 @@ export class LessonPanel {
         header.onclick = () => {
             this.collapsed = !this.collapsed;
             this.list.hidden = this.collapsed;
+            // Одного `hidden` мало: у списка инлайновый `display: grid`, а он сильнее
+            // правила браузера `[hidden] { display: none }` — панель не сворачивалась.
+            // Гасим тем же способом, каким показываем.
+            this.list.style.display = this.collapsed ? "none" : "grid";
             caret.style.transform = this.collapsed ? "rotate(-90deg)" : "";
         };
 
