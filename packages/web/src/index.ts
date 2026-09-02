@@ -24,6 +24,7 @@ import { AiOps } from "./aiOps";
 import { AutoSave } from "./autoSave";
 import { CoreGuard } from "./coreGuard";
 import { enableEconomyIfNeeded } from "./economy";
+import { Feedback } from "./feedback";
 import { FirstHint } from "./firstHint";
 import { GuestSave } from "./guestSave";
 import { type LessonCard, LessonPanel } from "./lessonPanel";
@@ -283,6 +284,24 @@ async function openProject(
             }).catch(() => undefined);
         },
     );
+
+    // Отзыв прямо из мастерской (B-101): «Что-то не так?» в углу, рядом с
+    // «Открытым кодом». Гостю кнопку не показываем — отзыв привязан к учётке,
+    // иначе его нечем ограничить от потока и некому отвечать.
+    if (meta?.user) {
+        const role = meta.user.role;
+        new Feedback({
+            projectId: id,
+            context: () => ({
+                rev: storage?.currentRevision?.(id) ?? 0,
+                роль: role,
+                карточка: meta?.card?.title ?? "",
+            }),
+            // 700 px: рендерер отдаёт JPEG, как только кадр крупнее, — иначе
+            // полноразмерный PNG не пролез бы в ограничение отзыва.
+            shot: () => app.activeView?.toImage(700) ?? null,
+        });
+    }
 
     if (meta?.user && meta.user.role === "student") {
         new ScreenLock({

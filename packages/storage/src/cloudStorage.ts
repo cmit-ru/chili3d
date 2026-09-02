@@ -166,6 +166,11 @@ export class CloudStorage implements IStorage {
             .catch(() => undefined);
     }
 
+    /** Версия работы, которая сейчас в мастерской: уходит с отзывом (B-101). */
+    currentRevision(projectId: string): number {
+        return this.revisions.get(projectId) ?? 0;
+    }
+
     onStateChange(listener: StateListener) {
         this.listeners.push(listener);
     }
