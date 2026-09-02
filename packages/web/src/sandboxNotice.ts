@@ -22,12 +22,13 @@ export class SandboxNotice {
         // Ровно одна строка и та же высота, что у UserBadge: под строкой заголовка
         // сразу идут кнопки ленты, и плашка в две строки накрывает правую группу
         // («Импорт/Экспорт») — по ней перестаёт попадать курсор. Поэтому текст
-        // короткий, переносов нет.
+        // короткий, переносов нет, а отступы такие, чтобы плашка кончалась ВЫШЕ
+        // ленты: строка заголовка кончается на 48-м пикселе (замер в браузере).
         this.root.style.cssText = `
-            position: fixed; top: 8px; right: 12px; z-index: 460;
+            position: fixed; top: 6px; right: 12px; z-index: 460;
             display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
-            white-space: nowrap;
-            padding: 5px 8px 5px 12px; border-radius: 6px;
+            white-space: nowrap; line-height: 1.2;
+            padding: 3px 6px 3px 10px; border-radius: 6px;
             background: #e8f4fd; border: 1px solid #1c6dbd; color: #114a83;
             font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
             font-size: 13px;
@@ -41,14 +42,14 @@ export class SandboxNotice {
         const register = document.createElement("a");
         register.href = "/auth/register";
         register.textContent = "Зарегистрироваться";
-        register.style.cssText = `font: inherit; font-weight: 600; padding: 5px 9px; border-radius: 4px;
+        register.style.cssText = `font: inherit; font-weight: 600; padding: 3px 9px; border-radius: 4px;
             background: #1c6dbd; color: #fff; text-decoration: none; white-space: nowrap;`;
         this.root.appendChild(register);
 
         const login = document.createElement("a");
         login.href = "/login";
         login.textContent = "Войти";
-        login.style.cssText = `font: inherit; padding: 5px 9px; border-radius: 4px;
+        login.style.cssText = `font: inherit; padding: 3px 9px; border-radius: 4px;
             border: 1px solid #1c6dbd; color: #114a83; text-decoration: none; white-space: nowrap;`;
         this.root.appendChild(login);
 
