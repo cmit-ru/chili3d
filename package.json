@@ -10,7 +10,8 @@
     "license": "AGPL-3.0-or-later",
     "type": "module",
     "scripts": {
-        "build": "rspack build",
+        "build": "rspack build && node scripts/precompress.mjs",
+        "check:bundle-size": "node scripts/precompress.mjs --check",
         "third-party": "node scripts/third-party.mjs",
         "check:third-party": "node scripts/third-party.mjs --check",
         "build:wasm": "cd cpp && cmake --preset release && cmake --build --preset release",

@@ -70,7 +70,12 @@ export default defineConfig({
                 {
                     from: resolve(configDir, "public"),
                     globOptions: {
-                        ignore: ["**/**/index.html"],
+                        // fonts/fzhei.json (9,8 МБ) и iconfont.js в деплой не нужны:
+                        // шрифт читает только textGenerator, реализации которого в
+                        // сборке нет, а значки приходят из бандла (packages/ui/src/
+                        // iconfont.js импортируется в mainWindow.ts). Файлы остаются
+                        // в исходниках — из образа уходит лишний вес.
+                        ignore: ["**/**/index.html", "**/fonts/**", "**/iconfont.js"],
                     },
                 },
             ],
