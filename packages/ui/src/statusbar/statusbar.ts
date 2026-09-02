@@ -6,6 +6,14 @@ import { div, label } from "@chili3d/element";
 import { SnapConfig } from "./snapConfig";
 import style from "./statusbar.module.css";
 
+/** Названия кнопок мыши переводятся: в подсказку они попадают как текст, который
+ *  читает пользователь, а не как идентификаторы раскладки навигации. */
+const NAVIGATION_KEYS: Record<string, I18nKeys> = {
+    Middle: "navigation.middle",
+    "Shift+Middle": "navigation.shiftMiddle",
+    "Ctrl+Middle": "navigation.ctrlMiddle",
+};
+
 export class Statusbar extends HTMLElement {
     private _isDefaultTip = true;
 
@@ -47,7 +55,8 @@ export class Statusbar extends HTMLElement {
     private readonly setDefaultTip = () => {
         this._isDefaultTip = true;
         const { pan, rotate } = Navigation3D.navigationKeyMap();
-        I18n.set(this.tip, "textContent", "prompt.default{0}{1}", pan, rotate);
+        const name = (key: string) => (NAVIGATION_KEYS[key] ? I18n.translate(NAVIGATION_KEYS[key]) : key);
+        I18n.set(this.tip, "textContent", "prompt.default{0}{1}", name(pan), name(rotate));
     };
 }
 

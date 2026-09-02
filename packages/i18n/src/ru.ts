@@ -260,8 +260,11 @@ export default {
         "regularPolygon.sides": "Число сторон",
         "pipe.bendRadius": "Радиус изгиба",
         "pipe.bendType": "Тип изгиба",
+        "navigation.ctrlMiddle": "Ctrl и средняя кнопка мыши",
+        "navigation.middle": "средняя кнопка мыши",
+        "navigation.shiftMiddle": "Shift и средняя кнопка мыши",
         "prompt.default{0}{1}":
-            "{0} чтобы двигать вид, {1} чтобы повернуть вид, Колесико мыши чтобы увеличить или уменьшить.",
+            "Двигать вид — {0}, повернуть — {1}, приблизить или отдалить — колёсико мыши.",
         "prompt.deleteDocument{0}": "Удалить {0}?",
         "prompt.pickArcBulge": "выберите точку подъема, ESC для отмены",
         "prompt.pickArcEnd": "выберите точку завершения, ESC для отмены",

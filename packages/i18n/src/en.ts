@@ -267,6 +267,9 @@ export default {
         "regularPolygon.sides": "Number of Sides",
         "pipe.bendRadius": "Bend Radius",
         "pipe.bendType": "Bend Type",
+        "navigation.ctrlMiddle": "Ctrl + middle mouse button",
+        "navigation.middle": "Middle mouse button",
+        "navigation.shiftMiddle": "Shift + middle mouse button",
         "prompt.default{0}{1}":
             "{0} to pan the view, {1} to rotate the view, Mouse wheel to scroll the zoom view",
         "prompt.deleteDocument{0}": "Do you want to delete {0}?",
