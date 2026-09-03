@@ -3,14 +3,10 @@
 
 import {
     Binding,
-    type CommandKeys,
-    CommandStore,
     Config,
     type IApplication,
-    type ICommand,
     type IConverter,
     Localize,
-    Logger,
     PubSub,
     Result,
     type Ribbon,
@@ -18,7 +14,7 @@ import {
     type RibbonTab,
     type RibbonTabKeys,
 } from "@chili3d/core";
-import { a, collection, createIcon, div, img, label, span } from "@chili3d/element";
+import { a, button, collection, div, img, span } from "@chili3d/element";
 import style from "./ribbon.module.css";
 import { RibbonPushButton } from "./ribbonButton";
 import { RibbonGroupElement } from "./ribbonGroup";
@@ -47,36 +43,6 @@ function backTo(): BackTo {
     return { href: "/home" };
 }
 
-export const QuickButton = (command: ICommand) => {
-    const data = CommandStore.getComandData(command);
-    if (!data) {
-        Logger.warn("commandData is undefined");
-        return span({ textContent: "null" });
-    }
-
-    const icon = createIcon(data.icon);
-    icon.classList.add(style.icon);
-    return span(
-        {
-            title: new Localize(`command.${data.key}`),
-            onclick: () => PubSub.default.pub("executeCommand", data.key),
-        },
-        icon,
-    );
-};
-
-class ActivedRibbonTabConverter implements IConverter<RibbonTab> {
-    constructor(
-        readonly tab: RibbonTab,
-        readonly style: string,
-        readonly activeStyle: string,
-    ) {}
-
-    convert(value: RibbonTab): Result<string> {
-        return Result.ok(this.tab === value ? `${this.style} ${this.activeStyle}` : this.style);
-    }
-}
-
 class DisplayConverter<T> implements IConverter<T> {
     constructor(readonly predicate: (value: T) => boolean) {}
 
@@ -86,13 +52,29 @@ class DisplayConverter<T> implements IConverter<T> {
 }
 
 export class RibbonUI extends HTMLElement {
+    private readonly undoButton: HTMLButtonElement;
+    private readonly redoButton: HTMLButtonElement;
+
     constructor(
         readonly app: IApplication,
         readonly dataContent: Ribbon,
     ) {
         super();
         this.className = style.root;
-        this.append(this.header(), this.ribbonTabs());
+        this.undoButton = this.toolButton(
+            "undo",
+            new Localize("command.edit.undo"),
+            new Localize("toolbar.undo.tip"),
+            () => PubSub.default.pub("executeCommand", "edit.undo"),
+        );
+        this.redoButton = this.toolButton(
+            "redo",
+            new Localize("command.edit.redo"),
+            new Localize("toolbar.redo.tip"),
+            () => PubSub.default.pub("executeCommand", "edit.redo"),
+        );
+        this.append(this.header(), this.commandsRow());
+        this.refreshHistoryButtons();
         app.mainWindow?.ribbon.onPropertyChanged(this.handleRibbonChanged);
     }
 
@@ -156,44 +138,65 @@ export class RibbonUI extends HTMLElement {
                 // `/home`, где «куда именно» решает уже оболочка, — там знака хватает.
                 ...(back.label ? [span({ className: style.backLabel, textContent: back.label })] : []),
             ),
-            div(
-                { className: style.ribbonTitlePanel },
-                collection({
-                    className: style.quickCommands,
-                    sources: this.dataContent.quickCommands,
-                    template: (command: CommandKeys) => QuickButton(command as any),
-                }),
-                span({ className: style.split }),
-                this.createRibbonHeader(),
-            ),
         );
     }
 
-    private createRibbonHeader() {
-        return collection({
-            className: style.tabHeaders,
-            sources: this.dataContent.tabs,
-            template: (tab: RibbonTab) => {
-                const converter = new ActivedRibbonTabConverter(tab, style.tabHeader, style.activedTab);
-                return label({
-                    className: new Binding(this.dataContent, "activeTab", converter),
-                    textContent: new Localize(tab.tabName),
-                    style: {
-                        display: new Binding(
-                            this.dataContent,
-                            "hiddenTabs",
-                            new DisplayConverter(
-                                (hiddens: RibbonTabKeys[]) => !hiddens.includes(tab.tabName),
-                            ),
-                        ),
-                    },
-                    onclick: () => {
-                        this.dataContent.activeTab = tab;
-                    },
-                });
-            },
-        });
+    /**
+     * Панель инструментов мастерской: ряд под полосой каркаса
+     * (`agent_docs/frame-contract.md`, «Панель инструментов мастерской»).
+     * Кнопки текстовые в обеих мастерских — иконка без подписи читается
+     * неоднозначно: стрелку повтора принимали за «Обновить страницу».
+     * Слова, порядок и опоры `data-tool-bar`/`data-act` общие со схемами.
+     *
+     * Ряда разделов команд здесь нет: раздел в форке ровно один («Модель»),
+     * и одинокий сегмент — нажатие, от которого ничего не происходит.
+     */
+    private commandsRow() {
+        return div({ className: style.commandsRow }, this.toolBar(), this.ribbonTabs());
     }
+
+    private toolBar() {
+        return div(
+            { className: style.toolBar, dataset: { toolBar: "" } },
+            this.undoButton,
+            this.redoButton,
+            this.toolButton("fit", new Localize("viewport.fitContent"), undefined, () => {
+                const view = this.app.activeView;
+                view?.cameraController.fitContent();
+                view?.update();
+            }),
+            this.toolButton("zin", "+", new Localize("viewport.zoomIn"), () => this.zoom(-5)),
+            this.toolButton("zout", "−", new Localize("viewport.zoomOut"), () => this.zoom(5)),
+        );
+    }
+
+    /** Слово на кнопке — либо из словаря, либо сам знак («+», «−»). */
+    private toolButton(act: string, text: Localize | string, tip: Localize | undefined, onclick: () => void) {
+        const result = button({
+            className: style.toolButton,
+            type: "button",
+            dataset: { act },
+            onclick,
+        });
+        if (text instanceof Localize) text.set(result, "textContent");
+        else result.textContent = text;
+        tip?.set(result, "title");
+        return result;
+    }
+
+    private zoom(delta: number) {
+        const view = this.app.activeView;
+        if (!view) return;
+        view.cameraController.zoom(view.width / 2, view.height / 2, delta);
+        view.update();
+    }
+
+    /** Кнопка, от которой ничего не произойдёт, ребёнку не показывается живой. */
+    private readonly refreshHistoryButtons = () => {
+        const history = this.app.activeView?.document?.history;
+        this.undoButton.disabled = !history || history.undoCount() === 0;
+        this.redoButton.disabled = !history || history.redoCount() === 0;
+    };
 
     private centerPanel() {
         // Форк «Макетки»: коллекции вкладок документов и «+» здесь больше нет.
@@ -244,10 +247,15 @@ export class RibbonUI extends HTMLElement {
 
     connectedCallback(): void {
         Config.instance.onPropertyChanged(this.handleConfigChanged);
+        PubSub.default.sub("historyChanged", this.refreshHistoryButtons);
+        PubSub.default.sub("activeViewChanged", this.refreshHistoryButtons);
+        this.refreshHistoryButtons();
     }
 
     disconnectedCallback(): void {
         Config.instance.removePropertyChanged(this.handleConfigChanged);
+        PubSub.default.remove("historyChanged", this.refreshHistoryButtons);
+        PubSub.default.remove("activeViewChanged", this.refreshHistoryButtons);
     }
 
     private readonly handleConfigChanged = (prop: keyof Config) => {

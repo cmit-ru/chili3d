@@ -3,6 +3,7 @@
 
 import type { INode, INodeLinkedList } from "../model";
 import type { IDisposable } from "./disposable";
+import { PubSub } from "./pubsub";
 
 export interface IHistoryRecord extends IDisposable {
     readonly name: string;
@@ -30,6 +31,11 @@ export class History implements IDisposable {
         } catch {
             // Автосохранение никогда не должно ломать саму правку.
         }
+        // Форк «Макетки»: то же событие, но для всех, кому нужна не запись, а
+        // вид, — панель инструментов гасит «Отменить», когда отменять нечего
+        // (`agent_docs/frame-contract.md`, «Панель инструментов мастерской»).
+        // `onChanged` для этого не годится: он один и занят автосохранением.
+        PubSub.default.pub("historyChanged");
     }
 
     #isUndoing = false;

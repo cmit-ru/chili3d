@@ -2,7 +2,6 @@
 // See LICENSE file in the project root for full license information.
 
 import {
-    type CommandKeys,
     Config,
     I18n,
     type IApplication,
@@ -22,12 +21,6 @@ import { showFloatPanel } from "./floatPanel";
 import { Permanent } from "./permanent";
 import { Toast } from "./toast";
 
-// Форк «Макетки»: у одного действия — одна дверь. «Сохранить сейчас» и
-// «Скачать… → Файл работы» живут в меню работы, поэтому дискета `doc.save` и
-// `doc.saveToFile` из быстрых команд убраны: рядом с работающим автосохранением
-// дискета читается как «значит, само не сохраняется».
-const quickCommands: CommandKeys[] = ["edit.undo", "edit.redo"];
-
 export class MainWindow extends HTMLElement implements IWindow {
     readonly ribbon: Ribbon;
     private _inited: boolean = false;
@@ -41,7 +34,11 @@ export class MainWindow extends HTMLElement implements IWindow {
         super();
         this.tabIndex = 0;
         this.ensureDom(dom);
-        this.ribbon = new Ribbon(quickCommands, tabs.map(RibbonTab.fromProfile));
+        // Быстрых команд в шапке нет: «Отменить» и «Повторить» стоят словами в
+        // панели инструментов под полосой (`frame-contract.md`, «Панель
+        // инструментов мастерской»), а дискета рядом с автосохранением читалась
+        // как «значит, само не сохраняется».
+        this.ribbon = new Ribbon([], tabs.map(RibbonTab.fromProfile));
     }
 
     protected ensureDom(dom?: HTMLElement) {

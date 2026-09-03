@@ -24,6 +24,8 @@ export interface PubSubEventMap {
     documentClosed: (document: IDocument) => void;
     editMaterial: (document: IDocument, material: Material, callback: (material: Material) => void) => void;
     executeCommand: (commandName: CommandKeys) => void;
+    /** Форк «Макетки»: в стопке отмены прибыло или убыло. */
+    historyChanged: () => void;
     modelUpdate: (model: INode) => void;
     openCommandContext: (command: ICommand) => void;
     parentVisibleChanged: (model: INode) => void;

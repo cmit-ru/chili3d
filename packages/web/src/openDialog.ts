@@ -4,9 +4,10 @@
 // Форк «Макетки»: окно «Открыть другую работу» (B-103).
 //
 // Раньше за другой работой ребёнок уходил в кабинет. Окно показывает тот же
-// список, что лента кабинета (`GET /api/projects`), и открывает работу обычным
-// переходом по адресу — смены работы «на месте» нет намеренно (ТЗ: полусмена,
-// когда осталось старое имя или чужая карточка урока, хуже перезагрузки).
+// список, что лента кабинета (`GET /api/projects`), и открывает работу В НОВОМ
+// ОКНЕ (B-151): собранная модель остаётся открытой. Смены работы «на месте» нет
+// намеренно (ТЗ: полусмена, когда осталось старое имя или чужая карточка урока,
+// хуже перезагрузки).
 //
 // Кабинетную плитку сюда взять нельзя: она серверная и оформлена в `app.css`,
 // который на `/3d/*` не грузится и по INV-011 грузиться не может. Поэтому здесь
@@ -29,8 +30,6 @@ interface WorkRow {
 export interface WorkPickerOptions {
     /** Номер открытой работы: у неё вместо перехода — «Ты сейчас здесь». */
     currentId: string | null;
-    /** Досылка правок перед уходом; `false` — уходить нельзя. */
-    flush: () => Promise<boolean>;
     /** Возврат работы из файла на компьютере (B-133); вид определяет сервер. */
     onFile?: (files: File[]) => void;
     returnFocus?: HTMLElement | null;
@@ -177,37 +176,16 @@ export function openWorkPicker(options: WorkPickerOptions) {
         words.append(name, note);
 
         button.append(preview, words);
-        if (!here) button.onclick = () => void go(row);
+        if (!here) button.onclick = () => go(row);
         return button;
     };
 
-    /** Перед любым уходом — досылка правок. Это единственное место в меню,
-     *  где можно потерять урок, поэтому молча не уходим никогда. */
-    const go = async (row: WorkRow) => {
-        const href = workshopHref(row);
-        status.hidden = false;
-        status.textContent = "Сохраняю…";
-        if (await options.flush()) {
-            window.location.assign(href);
-            return;
-        }
-        status.textContent = "Правки не сохранились";
-        modal.footer.textContent = "";
-
-        const retry = document.createElement("button");
-        retry.type = "button";
-        retry.textContent = "Остаться и повторить";
-        retry.style.cssText = PRIMARY_BUTTON;
-        retry.onclick = () => void go(row);
-
-        const anyway = document.createElement("button");
-        anyway.type = "button";
-        anyway.textContent = "Открыть, не сохранив последнее";
-        anyway.style.cssText = GHOST_BUTTON;
-        anyway.onclick = () => window.location.assign(href);
-
-        modal.footer.append(anyway, retry);
-        retry.focus();
+    /** Другая работа открывается В НОВОМ ОКНЕ (B-151, решение владельца 03.09):
+     *  собранная модель остаётся на месте и досохраняется сама, поэтому досылать
+     *  правки перед уходом больше не нужно — и терять здесь урок больше негде. */
+    const go = (row: WorkRow) => {
+        window.open(workshopHref(row), "_blank", "noopener");
+        modal.close();
     };
 
     const load = async () => {
@@ -249,7 +227,7 @@ export function openWorkPicker(options: WorkPickerOptions) {
             create.type = "button";
             create.textContent = "Создать новую работу";
             create.style.cssText = PRIMARY_BUTTON;
-            create.onclick = () => void goTo("/projects/new");
+            create.onclick = () => goTo("/projects/new");
             modal.footer.append(closeButton, create);
             return;
         }
@@ -258,11 +236,10 @@ export function openWorkPicker(options: WorkPickerOptions) {
         render();
     };
 
-    const goTo = async (href: string) => {
-        status.hidden = false;
-        status.textContent = "Сохраняю…";
-        if (await options.flush()) window.location.assign(href);
-        else status.textContent = "Правки не сохранились";
+    /** Новая работа — тоже в новом окне: дверь одна и та же (B-151). */
+    const goTo = (href: string) => {
+        window.open(href, "_blank", "noopener");
+        modal.close();
     };
 
     search.oninput = render;

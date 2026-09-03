@@ -12,12 +12,10 @@ rs.mock("../src/ribbon/ribbon.module.css", () => ({
     left: "r-left",
     appIcon: "r-app-icon",
     icon: "r-icon",
-    ribbonTitlePanel: "r-ribbon-title-panel",
     backLabel: "r-back-label",
-    quickCommands: "r-quick-commands",
-    split: "r-split",
-    tabHeader: "r-tab-header",
-    activedTab: "r-actived-tab",
+    commandsRow: "r-commands-row",
+    toolBar: "r-tool-bar",
+    toolButton: "r-tool-button",
     center: "r-center",
     right: "r-right",
     tabContentPanel: "r-tab-content-panel",
@@ -124,17 +122,35 @@ describe("RibbonUI", () => {
         CommandStore.unregisterCommand(CMD_QUICK);
     });
 
-    function createRibbonUI() {
+    // Вид, с которым работает панель инструментов: стопка отмены и камера.
+    // Счётчики держим в изменяемом объекте — стопка пополняется по ходу работы.
+    function makeActiveView(undoCount = 0, redoCount = 0) {
+        const counts = { undoCount, redoCount };
+        return {
+            counts,
+            width: 800,
+            height: 600,
+            document: {
+                history: { undoCount: () => counts.undoCount, redoCount: () => counts.redoCount },
+            },
+            cameraController: {
+                fitContent: rs.fn(() => {}),
+                zoom: rs.fn((_x: number, _y: number, _delta: number) => {}),
+            },
+            update: rs.fn(() => {}),
+        };
+    }
+
+    function createRibbonUI(activeView?: ReturnType<typeof makeActiveView>) {
         const tab1 = makeTab("tab.one");
         const tab2 = makeTab("tab.two");
         const dataContent = {
-            quickCommands: [CMD_QUICK],
             tabs: [tab1, tab2],
             activeTab: tab1,
             hiddenTabs: [],
             editableTabs: [],
         } as unknown as Ribbon;
-        const app = { views: [], mainWindow: undefined } as unknown as IApplication;
+        const app = { views: [], mainWindow: undefined, activeView } as unknown as IApplication;
         const ui = new RibbonUI(app, dataContent);
         return { ui, dataContent, tab1, tab2 };
     }
@@ -207,25 +223,81 @@ describe("RibbonUI", () => {
         expect(ui.querySelector(".r-back-label")).toBeNull();
     });
 
-    test("should publish executeCommand when quick command clicked", () => {
+    // Панель инструментов мастерской (`frame-contract.md`, «Панель инструментов
+    // мастерской»): те же слова, тот же порядок и те же подсказки, что в схемах.
+    // Иконка без подписи запрещена — стрелку повтора принимали за «Обновить
+    // страницу». Словарь в тестах отдаёт сам ключ, поэтому здесь видно, какое
+    // слово встанет на кнопку.
+    test("should render the workshop toolbar with words in the contract order", () => {
         const { ui } = createRibbonUI();
-        const titlePanel = mustQuery(ui, ".r-ribbon-title-panel");
-        // children: quickCommands collection, split span, tab headers collection
-        const quickContainer = titlePanel.children[0] as HTMLElement;
-        const quickButton = mustQuery(quickContainer, "span");
-        quickButton.click();
-        expect(published.some((p) => p.topic === "executeCommand" && p.args[0] === CMD_QUICK)).toBe(true);
+        const toolBar = mustQuery(ui, "[data-tool-bar]");
+        const buttons = [...toolBar.querySelectorAll("button")];
+        expect(buttons.map((b) => b.dataset["act"])).toEqual(["undo", "redo", "fit", "zin", "zout"]);
+        expect(buttons.map((b) => b.textContent)).toEqual([
+            "command.edit.undo",
+            "command.edit.redo",
+            "viewport.fitContent",
+            "+",
+            "−",
+        ]);
+        expect(buttons.map((b) => b.title)).toEqual([
+            "toolbar.undo.tip",
+            "toolbar.redo.tip",
+            "",
+            "viewport.zoomIn",
+            "viewport.zoomOut",
+        ]);
+        expect(toolBar.querySelectorAll("svg").length).toBe(0);
     });
 
-    test("should switch activeTab when tab header clicked", () => {
-        const { ui, dataContent, tab2 } = createRibbonUI();
-        const titlePanel = mustQuery(ui, ".r-ribbon-title-panel");
-        const tabHeaderContainer = titlePanel.children[2] as HTMLElement;
-        const tabLabels = tabHeaderContainer.querySelectorAll("label");
-        expect(tabLabels.length).toBe(2);
+    // Панель стоит рядом с полосой — в ряду под ней, а не внутри: в полосе по
+    // контракту ровно четыре зоны. Ряда разделов команд в ряду нет: раздел в
+    // форке один («Модель»), и одинокий сегмент — нажатие, от которого ничего
+    // не происходит.
+    test("should place the toolbar in the row under the frame bar", () => {
+        const { ui } = createRibbonUI();
+        expect(ui.querySelectorAll("[data-frame-bar] [data-tool-bar]").length).toBe(0);
+        const row = mustQuery(ui, ".r-commands-row");
+        expect(row.children.length).toBe(2);
+        expect((row.children[0] as HTMLElement).dataset["toolBar"]).toBe("");
+        expect((row.children[1] as HTMLElement).querySelectorAll("ribbon-group").length).toBe(2);
+    });
 
-        (tabLabels[1] as HTMLElement).click();
-        expect(dataContent.activeTab).toBe(tab2);
+    test("should publish undo and redo commands from the toolbar", () => {
+        const { ui } = createRibbonUI(makeActiveView(1, 1));
+        mustQuery<HTMLButtonElement>(ui, "[data-act='undo']").click();
+        mustQuery<HTMLButtonElement>(ui, "[data-act='redo']").click();
+        expect(published.map((p) => p.args[0])).toEqual(["edit.undo", "edit.redo"]);
+    });
+
+    // Кнопка, от которой ничего не произойдёт, ребёнку не показывается живой,
+    // но и оживать должна сама: стопка отмены пополняется по ходу работы.
+    test("should keep undo dead until there is something to undo", () => {
+        const view = makeActiveView(0, 0);
+        const { ui } = createRibbonUI(view);
+        document.body.appendChild(ui);
+        try {
+            const undo = mustQuery<HTMLButtonElement>(ui, "[data-act='undo']");
+            expect(undo.disabled).toBe(true);
+            view.counts.undoCount = 1;
+            PubSub.default.pub("historyChanged");
+            expect(undo.disabled).toBe(false);
+            expect(mustQuery<HTMLButtonElement>(ui, "[data-act='redo']").disabled).toBe(true);
+        } finally {
+            ui.remove();
+        }
+    });
+
+    test("should fit and zoom the active view", () => {
+        const view = makeActiveView();
+        const { ui } = createRibbonUI(view);
+        mustQuery<HTMLButtonElement>(ui, "[data-act='fit']").click();
+        expect(view.cameraController.fitContent).toHaveBeenCalledTimes(1);
+
+        mustQuery<HTMLButtonElement>(ui, "[data-act='zin']").click();
+        mustQuery<HTMLButtonElement>(ui, "[data-act='zout']").click();
+        expect(view.cameraController.zoom.mock.calls.map((call) => call[2])).toEqual([-5, 5]);
+        expect(view.update).toHaveBeenCalledTimes(3);
     });
 
     // Вкладок документов и «+» в шапке больше нет: работа на странице одна, а

@@ -350,6 +350,8 @@ export default {
         "toast.select.noSelected": "未选择任何对象",
         "toast.snap.notFoundValidPoint": "未找到有效的点",
         "toast.success": "成功",
+        "toolbar.redo.tip": "重做刚刚撤销的操作 (Ctrl+Y)",
+        "toolbar.undo.tip": "撤销上一步操作 (Ctrl+Z)",
         "transform.rotation": "旋转",
         "transform.scale": "缩放",
         "transform.translation": "位移",

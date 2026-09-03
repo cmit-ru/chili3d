@@ -4,13 +4,6 @@
     width: 100%;
 }
 
-.split {
-    width: 1px;
-    height: 14px;
-    margin: 0px 8px;
-    background-color: rgba(128, 128, 128, 0.45);
-}
-
 /* Полоса мастерской белая в обеих темах — ровно как в мастерской схем
    (`agent_docs/frame-contract.md`, строки «фон полосы», «наведение в полосе»,
    «текст полосы»). Тема Chili3D красила её в `--background-color`, и в 3D полоса
@@ -111,69 +104,58 @@
     }
 }
 
-.ribbonTitlePanel {
+/* Панель инструментов мастерской — общая со схемами часть ряда под полосой
+   (`agent_docs/frame-contract.md`, «Панель инструментов мастерской»). Кнопки
+   текстовые: иконка без подписи читалась неверно — стрелку повтора принимали
+   за «Обновить страницу». Своего шрифта у панели нет: буквы ей задаёт то же
+   правило оболочки, что и кнопкам полосы. */
+.commandsRow {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    background-color: var(--panel-background-color);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.toolBar {
     display: flex;
     flex-direction: row;
     align-items: center;
-    margin: 0px 4px;
+    gap: 4px;
+    padding: 4px 8px;
     flex: 0 0 auto;
+}
 
-    & .quickCommands {
-        display: flex;
-        flex-direction: row;
+.toolButton {
+    min-width: 24px;
+    min-height: 24px;
+    padding: 3px 10px;
+    border: 1px solid var(--border-color, #c7d3ce);
+    border-radius: 6px;
+    background: none;
+    color: inherit;
+    /* Кнопке шрифт не наследуется — но и своего у панели нет: буквы приходят
+       сверху, а семейство задаёт то же правило оболочки, что и в полосе. */
+    font: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+}
 
-        svg {
-            width: 14px;
-            height: 14px;
-            padding: 6px;
-            border-radius: 4px;
-            margin: 0px 6px;
+.toolButton:hover:not(:disabled) {
+    background-color: #eef2f1;
+    color: #12211d;
+}
 
-            &:hover {
-                background-color: #eef2f1;
-            }
-        }
-    }
-
-    /* Разделы команд, а не вкладки документов. Раньше активный раздел был
-       подчёркнут язычком вплотную к панели под ним — ровно так рисуют открытые
-       документы, и полоса читалась как «здесь открыто несколько работ». Работа
-       на странице одна (вкладок работ в «Макетке» нет), поэтому здесь ряд
-       сегментов-пилюль: выбранный сегмент залит, остальные — приглушённый
-       текст. Скругление 6 px, приглушённый `#4a625b`, наведение `#eef2f1` —
-       токены из `agent_docs/frame-contract.md`. Зелёной заливки тут нет
-       намеренно: она в полосе ровно одна, у главного действия. */
-    .tabHeaders {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        gap: 2px;
-    }
-
-    .tabHeader {
-        color: #4a625b;
-        padding: 4px 12px;
-        border-radius: 6px;
-        cursor: pointer;
-        user-select: none;
-
-        &:hover {
-            background-color: #eef2f1;
-        }
-    }
-
-    .activedTab {
-        background-color: #eef2f1;
-        color: #12211d;
-        font-weight: 600;
-    }
+.toolButton:disabled {
+    opacity: 0.5;
+    cursor: default;
 }
 
 .tabContentPanel {
     display: flex;
     flex-direction: row;
-    background-color: var(--panel-background-color);
-    border-bottom: 1px solid var(--border-color);
+    flex: 1 1 auto;
+    min-width: 0;
     overflow-x: auto;
     padding: 2px 0;
 

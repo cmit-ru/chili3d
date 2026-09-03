@@ -86,6 +86,10 @@ export function ensureFrameStyles() {
     style.textContent = `
         :focus-visible { outline: 2px solid #0e7a5f; outline-offset: 2px; }
         [data-frame-bar] button, [data-frame-bar] a { font-family: ${FRAME_FONT}; }
+        /* Панель инструментов стоит рядом с полосой и пишется тем же шрифтом:
+           своего у неё нет ни в одной мастерской (frame-contract.md,
+           «Оформление»). Кнопке шрифт не наследуется — его задают явно. */
+        [data-tool-bar] button { font-family: ${FRAME_FONT}; }
         /* Порядок важности в полосе (ТЗ, «Зона 3»): когда ширины не хватает,
            первой уезжает подпись у аватара — остаётся сам аватар. Имя работы
            сжимается многоточием, но не короче 12 знаков — это нижняя граница
@@ -134,6 +138,13 @@ const NAME_BUTTON = `
     background: none; color: inherit; font: inherit; font-weight: 600;
 `;
 
+/** «Файл ▾» — соседка имени, поэтому и рамка, и высота у них одни. */
+const FILE_BUTTON = `
+    display: inline-flex; align-items: center; min-height: 24px; padding: 4px 10px;
+    cursor: pointer; border: 1px solid var(--border-color, #c7d3ce); border-radius: 6px;
+    background: none; color: inherit; font: inherit;
+`;
+
 const USER_BUTTON = `
     display: inline-flex; align-items: center; gap: 8px; min-height: 24px;
     max-width: 22ch; padding: 4px 10px; cursor: pointer; border-radius: 6px;
@@ -154,7 +165,7 @@ const HELP_LINES = [
     "Вращать и приближать сцену — мышью; какая кнопка что делает, написано в самой мастерской.",
     "Ошибся — Ctrl+Z вернёт как было.",
     "Работа сохраняется сама; как идут дела, видно рядом с названием наверху.",
-    "Скачать, переименовать, открыть другую работу — нажми на название работы.",
+    "Скачать, переименовать, открыть другую работу — меню «Файл» наверху; имя правится и щелчком по нему.",
 ];
 const HELP_TITLE = "Как здесь всё устроено";
 const HELP_MORE = "Подробнее";
@@ -186,6 +197,7 @@ export class FrameBar {
     private readonly work: HTMLElement;
     private readonly nameButton: HTMLButtonElement;
     private readonly nameText: HTMLElement;
+    private readonly fileButton: HTMLButtonElement;
     private readonly stateText: HTMLElement;
     private readonly conflictButton: HTMLButtonElement;
     private readonly hint: HTMLElement;
@@ -197,6 +209,7 @@ export class FrameBar {
     private troubled = false;
     private offlineTimer?: number;
     private fadeTimer?: number;
+    private hintTimer?: number;
     private renaming = false;
 
     constructor(private readonly options: FrameBarOptions) {
@@ -213,22 +226,32 @@ export class FrameBar {
         this.nameText.style.cssText = "overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
         this.nameText.textContent = this.title;
 
+        // Имя — кнопка, а не надпись: по умолчанию оно совпадает с заголовком
+        // карточки, и плоский текст ребёнок читает как «что я делаю», а не как
+        // дверь. Щелчок по имени правит имя (`frame-contract.md`, «Меню
+        // работы»): спрятанное за названием меню человек не находил, а править
+        // имя щелчком по нему — то, чего от названия и ждут.
+        this.nameButton = document.createElement("button");
+        this.nameButton.type = "button";
+        this.nameButton.dataset["frameName"] = "";
+        this.nameButton.style.cssText = NAME_BUTTON;
+        this.nameButton.append(this.nameText);
+        this.nameButton.onclick = () => (this.canRename ? this.startRename() : this.explainNoRename());
+
         const caret = document.createElement("span");
         caret.textContent = "▾";
         caret.setAttribute("aria-hidden", "true");
         caret.style.cssText = "color:#4a625b;font-size:16px;line-height:1";
 
-        // Имя — кнопка, а не надпись: по умолчанию оно совпадает с заголовком
-        // карточки, и плоский текст ребёнок читает как «что я делаю», а не как
-        // дверь. Рамка и стрелка ▾ и есть признак нажимаемости.
-        this.nameButton = document.createElement("button");
-        this.nameButton.type = "button";
-        this.nameButton.dataset["frameName"] = "";
-        this.nameButton.style.cssText = NAME_BUTTON;
-        this.nameButton.setAttribute("aria-haspopup", "menu");
-        this.nameButton.setAttribute("aria-expanded", "false");
-        this.nameButton.append(this.nameText, caret);
-        this.nameButton.onclick = () => this.openWorkMenu();
+        // Меню работы открывается отдельной дверью сразу за именем — «Файл ▾».
+        this.fileButton = document.createElement("button");
+        this.fileButton.type = "button";
+        this.fileButton.dataset["frameFile"] = "";
+        this.fileButton.style.cssText = FILE_BUTTON;
+        this.fileButton.setAttribute("aria-haspopup", "menu");
+        this.fileButton.setAttribute("aria-expanded", "false");
+        this.fileButton.append(document.createTextNode("Файл "), caret);
+        this.fileButton.onclick = () => this.openWorkMenu();
 
         this.stateText = document.createElement("span");
         this.stateText.dataset["frameState"] = "";
@@ -254,7 +277,7 @@ export class FrameBar {
             background: #fdecec; border: 1px solid #b91c1c; color: #7f1d1d;
         `;
 
-        this.work.append(this.nameButton, this.stateText, this.conflictButton, this.hint);
+        this.work.append(this.nameButton, this.fileButton, this.stateText, this.conflictButton, this.hint);
 
         const people = document.getElementById("frame-user");
         if (people) {
@@ -279,11 +302,22 @@ export class FrameBar {
     private updateName() {
         this.nameText.textContent = this.title;
         this.nameButton.title = this.title;
-        this.nameButton.setAttribute(
-            "aria-label",
-            `Имя работы: ${this.title}. Нажми, чтобы открыть меню работы`,
-        );
+        this.nameButton.setAttribute("aria-label", `Имя работы: ${this.title}. Нажми, чтобы изменить имя`);
         document.title = `${this.title} — Макетка`;
+    }
+
+    /** Почему имя не правится: в песочнице работы ещё нет, чужую правит хозяин. */
+    private get renameReason() {
+        return this.options.sandbox
+            ? "В песочнице работы ещё нет — сначала сохрани её себе"
+            : "Это чужая работа: имя меняет только тот, чья она";
+    }
+
+    /** Нажатий, от которых ничего не происходит, в мастерской нет: имя объясняется. */
+    private explainNoRename() {
+        this.showHint(this.renameReason);
+        window.clearTimeout(this.hintTimer);
+        this.hintTimer = window.setTimeout(() => this.hideHint(), 4000);
     }
 
     private showHint(text: string) {
@@ -485,7 +519,7 @@ export class FrameBar {
     }
 
     private openWorkMenu() {
-        openMenu(this.nameButton, {
+        openMenu(this.fileButton, {
             title: "Эта работа",
             status: this.statusLine(),
             items: this.workMenuItems(),
@@ -498,9 +532,7 @@ export class FrameBar {
         items.push({
             text: "Переименовать",
             disabled: !this.canRename,
-            reason: this.options.sandbox
-                ? "В песочнице работы ещё нет — сначала сохрани её себе"
-                : "Это чужая работа: имя меняет только тот, чья она",
+            reason: this.renameReason,
             onSelect: () => this.startRename(),
         });
 
@@ -528,9 +560,8 @@ export class FrameBar {
             onSelect: () =>
                 openWorkPicker({
                     currentId: this.options.projectId,
-                    flush: () => this.flush(),
                     onFile: this.options.openFiles,
-                    returnFocus: this.nameButton,
+                    returnFocus: this.fileButton,
                 }),
         });
         items.push({
@@ -538,13 +569,17 @@ export class FrameBar {
             disabled: guest,
             reason: guestReason,
             reasonAction: guestAction,
-            onSelect: () => void this.leave("/projects/new"),
+            // Новая работа открывается В НОВОМ ОКНЕ (B-151): собранная модель
+            // остаётся на месте и досохраняется сама, уходить отсюда незачем.
+            onSelect: () => {
+                window.open("/projects/new", "_blank", "noopener");
+            },
         });
 
         items.push({
             text: "Скачать…",
             separatorBefore: true,
-            onSelect: () => openDownloadDialog(this.options.download, this.nameButton),
+            onSelect: () => openDownloadDialog(this.options.download, this.fileButton),
         });
 
         return items;
