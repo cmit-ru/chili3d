@@ -45,6 +45,7 @@ import { PreviewShots } from "./preview";
 import { returnWorkFromFiles } from "./returnWork";
 import { SandboxNotice } from "./sandboxNotice";
 import { ScreenLock } from "./screenLock";
+import { sendEvent } from "./track";
 import { ViewBanner } from "./viewBanner";
 import { cachedSceneVolumeMm3 } from "./volume";
 
@@ -185,7 +186,9 @@ function mountFrame(app: IApplication, autoSave: AutoSave, meta: ProjectMeta | n
                 if (!doc) return undefined;
                 const nodes = onlySelected ? doc.selection.getSelectedVisualNodes() : allVisualNodes(doc);
                 if (nodes.length === 0) return undefined;
-                return app.dataExchange.export(type, nodes);
+                const file = await app.dataExchange.export(type, nodes);
+                if (file) sendEvent("export_done", { type, nodes: nodes.length });
+                return file;
             },
             screenshot: () => app.activeView?.toImage(),
             workFile: () => (currentDoc ? JSON.stringify(currentDoc.serialize()) : undefined),
@@ -228,6 +231,18 @@ async function openSandbox(app: IApplication, spinner?: ModelSpinner) {
     let doc = await app.openDocument("sandbox").catch(() => undefined);
     if (!doc) doc = await app.newDocument("Проба");
     currentDoc = doc;
+
+    // «Первое тело» — событие активации (ТЗ §9): считаем его один раз и только
+    // в работе, которая открылась пустой. Вернувшийся к своей модели ребёнок
+    // первое тело построил в прошлый раз, и повторно его считать нечестно.
+    if (allVisualNodes(doc).length === 0) {
+        let первоеОтправлено = false;
+        PubSub.default.sub("historyChanged", () => {
+            if (первоеОтправлено || allVisualNodes(doc).length === 0) return;
+            первоеОтправлено = true;
+            sendEvent("first_shape");
+        });
+    }
 
     // Собранное в песочнице можно забрать себе, не уходя со страницы (B-096):
     // регистрация и вход происходят в оверлее поверх мастерской, а сцена
@@ -435,20 +450,7 @@ async function openProject(
 
     // Страховка от падения ядра: сохраняем перед рискованной операцией и
     // честно объясняем ребёнку, если геометрия всё-таки не получилась.
-    new CoreGuard(
-        app,
-        () => autoSave.saveNow(doc),
-        (event, props) => {
-            void fetch("/api/events", {
-                method: "POST",
-                credentials: "same-origin",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    events: [{ event, props, projectId: Number(id), ts: new Date().toISOString() }],
-                }),
-            }).catch(() => undefined);
-        },
-    );
+    new CoreGuard(app, () => autoSave.saveNow(doc), sendEvent);
 
     if (meta?.user && meta.user.role === "student") {
         new ScreenLock({
@@ -478,7 +480,7 @@ async function handleApplicaionBuilt(app: IApplication, earlyMeta: ProjectMeta |
     // уезжает раньше, чем ребёнок успевает прочитать, что не построилось.
     subscribeCoreErrors(PubSub.default);
 
-    const autoSave = new AutoSave(app);
+    const autoSave = new AutoSave(app, () => sendEvent("ops_batch"));
     const frame = mountFrame(app, autoSave, earlyMeta);
 
     // Файл работы (`.cd`) возвращается новой работой на сервере, а не вторым
@@ -511,6 +513,9 @@ async function handleApplicaionBuilt(app: IApplication, earlyMeta: ProjectMeta |
     }
 
     spinner.remove();
+    // Редактор готов: пара к серверному `editor_open_start` — по ней считается
+    // гейтовое «редактор готов p75 ≤3 с» (ТЗ §10). Раньше пары не было вовсе.
+    sendEvent("editor_ready");
 }
 
 // Мета грузится ДО сборки приложения: флаг «общие компьютеры класса» должен
