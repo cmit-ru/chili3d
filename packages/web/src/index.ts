@@ -41,6 +41,7 @@ import { type LessonCard, LessonPanel } from "./lessonPanel";
 import { Loading } from "./loading";
 import { ModelSpinner } from "./modelSpinner";
 import { type ВидСнимка, снимокОкна } from "./pageShot";
+import { PreviewShots } from "./preview";
 import { returnWorkFromFiles } from "./returnWork";
 import { SandboxNotice } from "./sandboxNotice";
 import { ScreenLock } from "./screenLock";
@@ -404,6 +405,20 @@ async function openProject(
     // Кэш 20 секунд: точный расчёт после пакета прогревает его, автосейв
     // не гоняет полный обход тел каждые несколько секунд (B-051).
     if (storage) storage.volumeProvider = () => cachedSceneVolumeMm3(doc, 20_000);
+
+    // Превью для ленты работ снимает таймер, а не такт сохранения (ТЗ §11, B-178):
+    // снимок раз в минуту и при уходе со страницы, и только если работу успели
+    // сохранить — впустую канал класса не занимаем.
+    if (storage) {
+        const preview = new PreviewShots({
+            snapshot: () => app.activeView?.toImage(320),
+            send: (dataUrl) => storage.saveThumbnail(dataUrl),
+        });
+        storage.onStateChange((state) => {
+            if (state === "saved") preview.workChanged();
+        });
+        preview.start();
+    }
 
     // Исполнитель пакетов построения ИИ-помощника (фаза Б): модель собирается
     // на глазах у того, кто открыл работу. Строит только вкладка с правом

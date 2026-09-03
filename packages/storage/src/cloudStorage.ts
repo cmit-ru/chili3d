@@ -230,11 +230,7 @@ export class CloudStorage implements IStorage {
             return true;
         }
         // Список недавних документов не храним — лента работ живёт в кабинете.
-        // Но именно с ним ядро отдаёт свежий снимок сцены: забираем его на превью.
-        if (table !== "documents") {
-            if (typeof value?.image === "string") void this.maybeSaveThumbnail(value.image);
-            return true;
-        }
+        if (table !== "documents") return true;
 
         const projectId = projectIdFromLocation();
         if (!projectId) return false;
@@ -311,18 +307,11 @@ export class CloudStorage implements IStorage {
     }
 
     /**
-     * Превью отправляем не чаще раза в минуту: снимок делается на каждом
-     * сохранении, а канал класса делится на тридцать человек.
+     * Превью снимается тем же рендерером в кадре (`toImage(320)`) и приходит
+     * сюда от таймера редактора, а не из такта сохранения — ТЗ §11,
+     * `packages/web/src/preview.ts`. Реже раза в минуту: канал класса делится
+     * на тридцать человек.
      */
-    private lastThumbAt = 0;
-    private async maybeSaveThumbnail(dataUrl: string): Promise<void> {
-        const now = Date.now();
-        if (now - this.lastThumbAt < 60_000) return;
-        this.lastThumbAt = now;
-        await this.saveThumbnail(dataUrl);
-    }
-
-    /** Превью снимается тем же рендерером в кадре — см. toImage(320). */
     async saveThumbnail(dataUrl: string): Promise<void> {
         const projectId = projectIdFromLocation();
         if (!projectId) return;
