@@ -351,6 +351,7 @@ export default {
         "toast.select.noSelected": "No selected",
         "toast.snap.notFoundValidPoint": "No valid point",
         "toast.success": "Success",
+        "toolbar.fit.tip": "Fit the whole work on the screen",
         "toolbar.redo.tip": "Do again what you undid (Ctrl+Y)",
         "toolbar.undo.tip": "Remove the last action (Ctrl+Z)",
         "transform.rotation": "Rotation",

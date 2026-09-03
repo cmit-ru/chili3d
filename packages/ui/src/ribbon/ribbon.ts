@@ -107,6 +107,7 @@ export class RibbonUI extends HTMLElement {
             { className: style.titleBar, id: "frame-bar", dataset: { frameBar: "" } },
             this.leftPanel(),
             this.centerPanel(),
+            this.toolBar(),
             this.mainPanel(),
             this.rightPanel(),
         );
@@ -142,29 +143,40 @@ export class RibbonUI extends HTMLElement {
     }
 
     /**
-     * Панель инструментов мастерской: ряд под полосой каркаса
-     * (`agent_docs/frame-contract.md`, «Панель инструментов мастерской»).
-     * Кнопки текстовые в обеих мастерских — иконка без подписи читается
-     * неоднозначно: стрелку повтора принимали за «Обновить страницу».
-     * Слова, порядок и опоры `data-tool-bar`/`data-act` общие со схемами.
-     *
-     * Ряда разделов команд здесь нет: раздел в форке ровно один («Модель»),
-     * и одинокий сегмент — нажатие, от которого ничего не происходит.
+     * Команды раздела. Ряда разделов здесь нет: раздел в форке ровно один
+     * («Модель»), и одинокий сегмент — нажатие, от которого ничего не происходит.
      */
     private commandsRow() {
-        return div({ className: style.commandsRow }, this.toolBar(), this.ribbonTabs());
+        return div({ className: style.commandsRow }, this.ribbonTabs());
     }
 
+    /**
+     * Третья зона полосы — общие кнопки вида (`agent_docs/frame-contract.md`,
+     * «Общие кнопки вида в полосе»). Слова, порядок и опоры `data-tool-bar`/`data-act`
+     * дословно те же, что в мастерской схем: до 03.09.2026 эти кнопки стояли в
+     * разных местах двух мастерских, а в 3D ещё и отжимали команды раздела за край
+     * экрана — ряд под полосой делил ширину с ними.
+     *
+     * Кнопки текстовые в обеих мастерских — иконка без подписи читается
+     * неоднозначно: стрелку повтора принимали за «Обновить страницу».
+     */
     private toolBar() {
         return div(
-            { className: style.toolBar, dataset: { toolBar: "" } },
+            { className: style.toolBar, dataset: { toolBar: "", frameZone: "инструменты" } },
             this.undoButton,
             this.redoButton,
-            this.toolButton("fit", new Localize("viewport.fitContent"), undefined, () => {
-                const view = this.app.activeView;
-                view?.cameraController.fitContent();
-                view?.update();
-            }),
+            // «В экран», а не «Вписать в экран»: в полосе на ширине 1024 полное
+            // слово не помещалось. Целиком его договаривает подсказка.
+            this.toolButton(
+                "fit",
+                new Localize("viewport.fitContent"),
+                new Localize("toolbar.fit.tip"),
+                () => {
+                    const view = this.app.activeView;
+                    view?.cameraController.fitContent();
+                    view?.update();
+                },
+            ),
             this.toolButton("zin", "+", new Localize("viewport.zoomIn"), () => this.zoom(-5)),
             this.toolButton("zout", "−", new Localize("viewport.zoomOut"), () => this.zoom(5)),
         );

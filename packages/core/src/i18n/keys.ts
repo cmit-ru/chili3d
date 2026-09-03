@@ -345,6 +345,7 @@ export const I18N_KEYS = [
     "toast.select.noSelected",
     "toast.snap.notFoundValidPoint",
     "toast.success",
+    "toolbar.fit.tip",
     "toolbar.redo.tip",
     "toolbar.undo.tip",
     "transform.rotation",

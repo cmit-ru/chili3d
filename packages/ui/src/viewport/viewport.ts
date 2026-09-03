@@ -78,7 +78,6 @@ export class Viewport extends HTMLElement {
                           onclick: (e) => e.stopPropagation(),
                       },
                       this.createCameraControls(),
-                      this.createActionControls(),
                   )
                 : "",
             this.createViewModeControl(),
@@ -90,37 +89,6 @@ export class Viewport extends HTMLElement {
             { className: style.border },
             this.createCameraControl("orthographic", "icon-orthographic"),
             this.createCameraControl("perspective", "icon-perspective"),
-        );
-    }
-
-    private createActionControls() {
-        return div(
-            { className: style.border },
-            svg({
-                icon: "icon-fitcontent",
-                title: new Localize("viewport.fitContent"),
-                onclick: async (e) => {
-                    e.stopPropagation();
-                    this.view.cameraController.fitContent();
-                    this.view.update();
-                },
-            }),
-            svg({
-                icon: "icon-zoomin",
-                title: new Localize("viewport.zoomIn"),
-                onclick: () => {
-                    this.view.cameraController.zoom(this.view.width / 2, this.view.height / 2, -5);
-                    this.view.update();
-                },
-            }),
-            svg({
-                icon: "icon-zoomout",
-                title: new Localize("viewport.zoomOut"),
-                onclick: () => {
-                    this.view.cameraController.zoom(this.view.width / 2, this.view.height / 2, 5);
-                    this.view.update();
-                },
-            }),
         );
     }
 

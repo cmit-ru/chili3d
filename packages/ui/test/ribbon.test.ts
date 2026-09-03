@@ -183,13 +183,13 @@ describe("RibbonUI", () => {
     // Опоры спеки паритета двух мастерских (`frame-contract.md`, «Опоры для
     // теста»): без них 3D и схемы нечем сверить, а сломать их легко случайной
     // правкой разметки.
-    test("should mark the frame bar and its four zones", () => {
+    test("should mark the frame bar and its five zones", () => {
         const { ui } = createRibbonUI();
         expect(ui.querySelectorAll("[data-frame-bar]").length).toBe(1);
         const zones = [...ui.querySelectorAll("[data-frame-zone]")].map((el) =>
             el.getAttribute("data-frame-zone"),
         );
-        expect(zones).toEqual(["знак", "работа", "главное-действие", "человек"]);
+        expect(zones).toEqual(["знак", "работа", "инструменты", "главное-действие", "человек"]);
     });
 
     test("should render ribbon groups for each tab", () => {
@@ -223,8 +223,8 @@ describe("RibbonUI", () => {
         expect(ui.querySelector(".r-back-label")).toBeNull();
     });
 
-    // Панель инструментов мастерской (`frame-contract.md`, «Панель инструментов
-    // мастерской»): те же слова, тот же порядок и те же подсказки, что в схемах.
+    // Общие кнопки вида (`frame-contract.md`, «Общие кнопки вида в полосе»):
+    // те же слова, тот же порядок и те же подсказки, что в схемах.
     // Иконка без подписи запрещена — стрелку повтора принимали за «Обновить
     // страницу». Словарь в тестах отдаёт сам ключ, поэтому здесь видно, какое
     // слово встанет на кнопку.
@@ -243,24 +243,27 @@ describe("RibbonUI", () => {
         expect(buttons.map((b) => b.title)).toEqual([
             "toolbar.undo.tip",
             "toolbar.redo.tip",
-            "",
+            "toolbar.fit.tip",
             "viewport.zoomIn",
             "viewport.zoomOut",
         ]);
         expect(toolBar.querySelectorAll("svg").length).toBe(0);
     });
 
-    // Панель стоит рядом с полосой — в ряду под ней, а не внутри: в полосе по
-    // контракту ровно четыре зоны. Ряда разделов команд в ряду нет: раздел в
-    // форке один («Модель»), и одинокий сегмент — нажатие, от которого ничего
-    // не происходит.
-    test("should place the toolbar in the row under the frame bar", () => {
+    // Кнопки вида стоят в самой полосе, третьей зоной, а не в ряду под ней:
+    // ряд отжимал команды раздела за край экрана и стоял не там, где в схемах
+    // (решение владельца 03.09.2026). Под полосой остались только команды:
+    // ряда разделов там нет — раздел в форке один («Модель»), и одинокий
+    // сегмент был бы нажатием, от которого ничего не происходит.
+    test("should place the view buttons inside the frame bar", () => {
         const { ui } = createRibbonUI();
-        expect(ui.querySelectorAll("[data-frame-bar] [data-tool-bar]").length).toBe(0);
+        const bar = mustQuery(ui, "[data-frame-bar]");
+        const toolBar = mustQuery(bar, "[data-tool-bar]");
+        expect(toolBar.dataset["frameZone"]).toBe("инструменты");
+        expect([...bar.children].indexOf(toolBar)).toBe(2);
         const row = mustQuery(ui, ".r-commands-row");
-        expect(row.children.length).toBe(2);
-        expect((row.children[0] as HTMLElement).dataset["toolBar"]).toBe("");
-        expect((row.children[1] as HTMLElement).querySelectorAll("ribbon-group").length).toBe(2);
+        expect(row.children.length).toBe(1);
+        expect((row.children[0] as HTMLElement).querySelectorAll("ribbon-group").length).toBe(2);
     });
 
     test("should publish undo and redo commands from the toolbar", () => {
