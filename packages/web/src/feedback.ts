@@ -14,7 +14,8 @@
 // перекрывалась пустой полосой действий вьюпорта, из-за чего не нажималась.
 //
 // Контракт оболочки — cad-app `src/routes/feedback.js`:
-//   POST /api/feedback { editor, kind, message, projectId, context, shot } → { ok } | 429 { message }
+//   POST /api/feedback { editor, kind, message, projectId, context, shot } → { ok, id } | 429 { message }
+//   POST /api/feedback/<id>/files — файл сырым телом, имя в X-File-Name (только взрослым, B-137 Ф2)
 
 import { FRAME_FONT } from "./errorBanner";
 import { НЕ_СНИМАТЬ } from "./pageShot";
@@ -58,6 +59,62 @@ export function последниеОшибки(): string[] {
     return ошибки.slice();
 }
 
+/* Вложения (B-137 Ф2, ТЗ обращений §7). Проверка до отправки повторяет серверную,
+   чтобы отказ пришёл сразу, а не после 5 МБ трафика; последнее слово за сервером. */
+const РАСШИРЕНИЯ = ".png,.jpg,.jpeg,.webp,.pdf,.txt,.log,.csv,.json";
+const ДОПУСТИМЫЕ = /\.(png|jpe?g|webp|pdf|txt|log|csv|json)$/i;
+const ФАЙЛОВ_ЗА_РАЗ = 3;
+const ФАЙЛ_МАКС = 5_242_880;
+const ВЗРОСЛЫЕ = new Set(["teacher", "admin", "external"]);
+
+/** Можно ли этой роли прикладывать файлы: взрослым да, ребёнку и гостю нет. */
+export function можноПрикладывать(role: string | undefined | null): boolean {
+    return ВЗРОСЛЫЕ.has(role ?? "");
+}
+
+/** Что не так с выбранными файлами — словами из ТЗ §8, или null, если всё в порядке. */
+export function проверитьФайлы(файлы: File[]): string | null {
+    if (файлы.length > ФАЙЛОВ_ЗА_РАЗ) {
+        return "Больше трёх файлов за раз не получится — пришлите остальные следующим сообщением";
+    }
+    for (const f of файлы) {
+        if (/\.cd$/i.test(f.name))
+            return "Файл работы прикладывать не нужно: пришлите ссылку на неё, мы откроем";
+        if (!ДОПУСТИМЫЕ.test(f.name)) return "Такие файлы мы не принимаем: можно картинку, PDF или текст";
+        if (f.size > ФАЙЛ_МАКС) return "Файл больше 5 МБ — пришлите картинку поменьше";
+        if (!f.size) return "Файл пустой — в нём ничего нет";
+    }
+    return null;
+}
+
+/**
+ * Файлы уходят после текста, по одному, чтобы «Файл 2 из 3» было правдой. Первый
+ * отказ останавливает остальные — человек увидит, какой именно файл не прошёл.
+ * Возвращает текст беды или null.
+ */
+async function приложить(id: number, файлы: File[], сказать: (t: string) => void): Promise<string | null> {
+    for (let i = 0; i < файлы.length; i++) {
+        const f = файлы[i];
+        сказать(`Файл ${i + 1} из ${файлы.length}…`);
+        try {
+            const r = await fetch(`/api/feedback/${id}/files`, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "Content-Type": "application/octet-stream",
+                    "X-File-Name": `UTF-8''${encodeURIComponent(f.name)}`,
+                },
+                body: f,
+            });
+            const j = await r.json().catch(() => ({}) as { message?: string });
+            if (!r.ok) return j.message || `Файл «${f.name}» не отправился`;
+        } catch {
+            return `Файл «${f.name}» не отправился — похоже, пропала сеть`;
+        }
+    }
+    return null;
+}
+
 const PANEL = `
     position: fixed; inset: 0; z-index: 1200; display: flex;
     align-items: center; justify-content: center; padding: 16px;
@@ -93,6 +150,8 @@ export interface FeedbackOptions {
     /** Снимок для отзыва в виде data-url; null, если снимать нечего.
      *  Обещанием: окно мастерской рисуется не мгновенно. */
     shot?: () => Promise<string | null>;
+    /** Можно ли приложить файлы: только взрослым (ТЗ обращений §7). Без него поля нет. */
+    attach?: () => boolean;
 }
 
 export class Feedback {
@@ -208,6 +267,21 @@ export class Feedback {
             background: #f8fafc;
         `;
 
+        // Поле файлов есть только у взрослых; ребёнку хватает картинки экрана.
+        const файлы = this.options.attach?.() ? document.createElement("input") : null;
+        let полеФайлов: HTMLElement | null = null;
+        if (файлы) {
+            файлы.type = "file";
+            файлы.multiple = true;
+            файлы.accept = РАСШИРЕНИЯ;
+            файлы.setAttribute("data-fb-files", "");
+            полеФайлов = document.createElement("label");
+            полеФайлов.style.cssText = "display:grid;gap:5px";
+            const подпись = document.createElement("span");
+            подпись.textContent = "Приложить файлы — до трёх, каждый до 5 МБ: картинка, PDF или текст";
+            полеФайлов.append(подпись, файлы);
+        }
+
         const send = document.createElement("button");
         send.type = "button";
         send.textContent = "Отправить";
@@ -218,7 +292,9 @@ export class Feedback {
         note.hidden = true;
         note.style.cssText = "line-height:1.4";
 
-        card.append(title, lede, tabs, label, check, место, превью, send, note);
+        card.append(title, lede, tabs, label, check, место, превью);
+        if (полеФайлов) card.append(полеФайлов);
+        card.append(send, note);
         document.body.appendChild(root);
         текст.focus();
 
@@ -250,6 +326,12 @@ export class Feedback {
         };
 
         send.onclick = async () => {
+            const выбранные = файлы ? Array.from(файлы.files ?? []) : [];
+            const беда = проверитьФайлы(выбранные);
+            if (беда) {
+                сказать(беда, true);
+                return;
+            }
             send.disabled = true;
             сказать("Отправляем…");
             try {
@@ -279,15 +361,23 @@ export class Feedback {
                     сказать(answer.message || "Не получилось отправить. Попробуйте ещё раз.", true);
                     return;
                 }
+                const неДошёл = выбранные.length
+                    ? await приложить(Number(answer.id) || 0, выбранные, (t) => сказать(t))
+                    : null;
                 const done = document.createElement("div");
                 done.style.cssText = "font-size:19px;font-weight:700";
                 done.textContent = "Спасибо!";
                 const doneText = document.createElement("div");
                 doneText.style.cssText = "opacity:.75;line-height:1.4";
-                doneText.textContent = "Мы получили сообщение и посмотрим, что там.";
+                // Текст уже принят, назад дороги нет: о файле, который не дошёл, говорим
+                // здесь и не закрываем окно сами — и показываем, где его приложить ещё раз.
+                doneText.textContent = неДошёл
+                    ? `Сообщение получили, а файл — нет. ${неДошёл}. Приложить его можно в кабинете, в «Мои обращения».`
+                    : "Мы получили сообщение и посмотрим, что там.";
                 card.replaceChildren(done, doneText);
                 card.setAttribute("data-fb-done", "");
-                window.setTimeout(close, 2500);
+                if (неДошёл) card.setAttribute("data-fb-file-failed", "");
+                else window.setTimeout(close, 2500);
             } catch {
                 send.disabled = false;
                 сказать("Не получилось отправить — похоже, пропала сеть.", true);

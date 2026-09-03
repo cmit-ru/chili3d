@@ -19,6 +19,8 @@ interface Отправленное {
 }
 
 const запросы: { url: string; body: Отправленное }[] = [];
+/** Файлы уходят отдельными запросами сырым телом — здесь их след. */
+const файлы: { url: string; name: string; size: number; type: string }[] = [];
 
 /** Снимок готовится обещанием — даём микрозадачам провернуться. */
 const провернуть = async () => {
@@ -40,10 +42,21 @@ describe("Отзыв из мастерской", () => {
 
     beforeEach(() => {
         запросы.length = 0;
+        файлы.length = 0;
         статус = 200;
         ответСервера = { ok: true, id: 7 };
         globalThis.fetch = ((url: string, init?: RequestInit) => {
             if (String(url).endsWith("/3d/source.txt")) return ответ(200, {});
+            if (init?.body instanceof Blob) {
+                const headers = (init.headers ?? {}) as Record<string, string>;
+                файлы.push({
+                    url: String(url),
+                    name: headers["X-File-Name"],
+                    size: init.body.size,
+                    type: headers["Content-Type"],
+                });
+                return ответ(200, { ok: true, file: { id: 1 } });
+            }
             запросы.push({ url: String(url), body: JSON.parse(String(init?.body ?? "{}")) });
             return ответ(статус, ответСервера);
         }) as typeof fetch;
@@ -53,13 +66,22 @@ describe("Отзыв из мастерской", () => {
         document.body.innerHTML = "";
     });
 
-    const открыть = () => {
+    const открыть = (attach?: () => boolean) => {
         new Feedback({
             projectId: "42",
             context: () => ({ rev: 5, карточка: "Брелок" }),
             shot: async () => "data:image/jpeg;base64,AAAA",
+            attach,
         }).open();
     };
+
+    /** Выбор файлов в окне: браузер выставляет `files` сам, тест — руками. */
+    const выбрать = (...список: File[]) => {
+        const поле = document.querySelector("[data-fb-files]") as HTMLInputElement;
+        Object.defineProperty(поле, "files", { value: список, configurable: true });
+    };
+    const png = (name = "экран.png", size = 16) =>
+        new File([new Uint8Array(size)], name, { type: "image/png" });
 
     test("своей кнопки в углу нет — окно открывает шапка", () => {
         const отзыв = new Feedback({ projectId: "42" });
@@ -142,5 +164,78 @@ describe("Отзыв из мастерской", () => {
         const note = document.querySelector("[data-fb-error]") as HTMLElement;
         expect(note?.textContent).toContain("уже получили");
         expect(send.disabled).toBe(false);
+    });
+
+    test("поля файлов нет ни у гостя, ни у ребёнка — только у взрослого", () => {
+        открыть();
+        expect(document.querySelector("[data-fb-files]")).toBeNull();
+        document.body.innerHTML = "";
+
+        открыть(() => false);
+        expect(document.querySelector("[data-fb-files]")).toBeNull();
+        document.body.innerHTML = "";
+
+        открыть(() => true);
+        const поле = document.querySelector("[data-fb-files]") as HTMLInputElement;
+        expect(поле).not.toBeNull();
+        expect(поле.multiple).toBe(true);
+        expect(поле.accept).toContain(".png");
+        expect(поле.accept).not.toContain(".svg");
+    });
+
+    test("файлы уходят после текста, по одному, сырым телом с именем в заголовке", async () => {
+        открыть(() => true);
+        выбрать(png("экран.png"), png("лог.txt", 5));
+        (document.querySelector("[data-fb-send]") as HTMLButtonElement).click();
+        await провернуть();
+        await провернуть();
+
+        expect(запросы).toHaveLength(1);
+        expect(файлы).toHaveLength(2);
+        expect(файлы[0].url).toBe("/api/feedback/7/files");
+        expect(файлы[0].type).toBe("application/octet-stream");
+        expect(файлы[0].name).toBe("UTF-8''%D1%8D%D0%BA%D1%80%D0%B0%D0%BD.png");
+        expect(файлы[0].size).toBe(16);
+        expect(файлы[1].name).toBe("UTF-8''%D0%BB%D0%BE%D0%B3.txt");
+        expect(document.querySelector("[data-fb-done]")).not.toBeNull();
+        expect(document.querySelector("[data-fb-file-failed]")).toBeNull();
+    });
+
+    test("файл работы и чужие типы останавливаются до отправки — текст не уходит", async () => {
+        открыть(() => true);
+        выбрать(png("брелок.cd"));
+        (document.querySelector("[data-fb-send]") as HTMLButtonElement).click();
+        await провернуть();
+
+        expect(запросы).toHaveLength(0);
+        expect(файлы).toHaveLength(0);
+        const note = document.querySelector("[data-fb-error]") as HTMLElement;
+        expect(note?.textContent).toContain("ссылку на неё");
+
+        выбрать(png("a.png"), png("b.png"), png("c.png"), png("d.png"));
+        (document.querySelector("[data-fb-send]") as HTMLButtonElement).click();
+        await провернуть();
+        expect(запросы).toHaveLength(0);
+        expect((document.querySelector("[data-fb-error]") as HTMLElement).textContent).toContain("трёх");
+    });
+
+    test("файл не дошёл — текст всё равно принят, и сказано, где приложить снова", async () => {
+        открыть(() => true);
+        выбрать(png("экран.png"));
+        const обычный = globalThis.fetch;
+        globalThis.fetch = ((url: string, init?: RequestInit) =>
+            init?.body instanceof Blob
+                ? ответ(413, { message: "Файл больше 5 МБ — пришлите картинку поменьше" })
+                : обычный(url, init)) as typeof fetch;
+        (document.querySelector("[data-fb-send]") as HTMLButtonElement).click();
+        await провернуть();
+        await провернуть();
+
+        expect(запросы).toHaveLength(1);
+        const card = document.querySelector("[data-fb-done]") as HTMLElement;
+        expect(card).not.toBeNull();
+        expect(card.hasAttribute("data-fb-file-failed")).toBe(true);
+        expect(card.textContent).toContain("больше 5 МБ");
+        expect(card.textContent).toContain("Мои обращения");
     });
 });

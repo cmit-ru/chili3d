@@ -33,7 +33,7 @@ import { openConflictDialog } from "./conflictDialog";
 import { CoreGuard } from "./coreGuard";
 import { enableEconomyIfNeeded } from "./economy";
 import { subscribeCoreErrors } from "./errorBanner";
-import { Feedback } from "./feedback";
+import { Feedback, можноПрикладывать } from "./feedback";
 import { FirstHint } from "./firstHint";
 import { type CopyAnswer, FrameBar } from "./frameBar";
 import { GuestSave } from "./guestSave";
@@ -321,6 +321,8 @@ async function openProject(
             видСнимка = снимок.вид;
             return снимок.картинка;
         },
+        // Файлы — только взрослым (B-137 Ф2); роль — из ответа оболочки, сервер её перепроверит.
+        attach: () => можноПрикладывать(meta?.user?.role),
     });
 
     if (!id) {
