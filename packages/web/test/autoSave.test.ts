@@ -73,6 +73,41 @@ describe("автосохранение и виды", () => {
         expect(автосейв.hasPending()).toBe(true);
     });
 
+    test("пачка правок отмечается ровно тогда, когда уходит на запись", async () => {
+        const { документ, сохранений } = работа();
+        let пачек = 0;
+        const автосейв = new AutoSave({} as IApplication, () => {
+            пачек += 1;
+        });
+        автосейв.watch(документ);
+
+        документ.acts.push(вид("Сбоку"));
+        expect(пачек).toBe(0); // правка есть, записи ещё нет
+
+        await rs.advanceTimersByTimeAsync(12_000);
+        expect(сохранений()).toBe(1);
+        expect(пачек).toBe(1);
+
+        // Тишина без правок новых пачек не делает: иначе гейтовое число §10
+        // считалось бы по пустым тактам.
+        await rs.advanceTimersByTimeAsync(120_000);
+        expect(пачек).toBe(1);
+    });
+
+    test("остановленное автосохранение пачек не отмечает", async () => {
+        const { документ } = работа();
+        let пачек = 0;
+        const автосейв = new AutoSave({} as IApplication, () => {
+            пачек += 1;
+        });
+        автосейв.watch(документ);
+        документ.acts.push(вид("Сбоку"));
+        автосейв.stop();
+
+        await rs.advanceTimersByTimeAsync(120_000);
+        expect(пачек).toBe(0);
+    });
+
     test("остановленное автосохранение виды не трогают", () => {
         const { документ } = работа();
         const автосейв = new AutoSave({} as IApplication);

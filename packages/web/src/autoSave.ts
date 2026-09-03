@@ -22,7 +22,11 @@ export class AutoSave {
     private stopped = false;
     private attached = new WeakSet<IDocument>();
 
-    constructor(private readonly app: IApplication) {}
+    constructor(
+        private readonly app: IApplication,
+        /** Пачка правок уходит на запись — событие `ops_batch` метрик (ТЗ §9). */
+        private readonly onBatch?: () => void,
+    ) {}
 
     /** Останавливается при расхождении: дальше сохраняет только сам ребёнок. */
     stop() {
@@ -76,6 +80,7 @@ export class AutoSave {
         if (this.stopped || this.saving) return;
         this.saving = true;
         try {
+            this.onBatch?.();
             await document.save();
         } catch (error) {
             // Ошибку показывает индикатор: он подписан на состояние хранилища.
