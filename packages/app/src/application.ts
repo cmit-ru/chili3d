@@ -207,7 +207,15 @@ export class Application extends Observable implements IApplication {
         const document = new Document(this, name);
         const lightGray = new Material({ document, name: "LightGray", color: 0xdedede });
         const deepGray = new Material({ document, name: "DeepGray", color: 0x898989 });
+        // Форк «Макетки»: материалы по умолчанию — часть заведения документа, а не
+        // действие ребёнка. Без глушения истории «Отменить» горело на нетронутой
+        // работе, а нажатие снимало оба материала: на экране ничего не менялось,
+        // зато следующая фигура получала пустой materialId (geometryNode берёт
+        // `materials.at(0)`). Загрузка сохранённой работы историю глушит так же.
+        const previous = document.history.disabled;
+        document.history.disabled = true;
         document.modelManager.materials.push(lightGray, deepGray);
+        document.history.disabled = previous;
         await this.createActiveView(document);
         return document;
     }
