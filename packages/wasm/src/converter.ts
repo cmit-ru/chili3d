@@ -13,6 +13,7 @@ import {
     type IShapeConverter,
     Material,
     Result,
+    type StepExportPart,
     type StlExportOptions,
 } from "@chili3d/core";
 import type { ShapeNode } from "../lib/chili-wasm";
@@ -100,14 +101,20 @@ export class OccShapeConverter implements IShapeConverter {
         });
     };
 
-    convertToSTEP(...shapes: IShape[]): Result<string> {
-        const occShapes = shapes.map((shape) => {
+    convertToSTEP(parts: StepExportPart[]): Result<string> {
+        const occShapes = parts.map(({ shape }) => {
             if (shape instanceof OccShape) {
                 return shape.shape;
             }
             throw new Error("Shape is not an OccShape");
         });
-        return Result.ok(wasm.Converter.convertToStep(occShapes));
+        return Result.ok(
+            wasm.Converter.convertToStep(
+                occShapes,
+                parts.map((part) => part.name ?? ""),
+                parts.map((part) => part.color ?? ""),
+            ),
+        );
     }
 
     convertFromSTEP(document: IDocument, step: Uint8Array): Result<FolderNode> {

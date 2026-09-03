@@ -13,9 +13,10 @@
 #include <IGESControl_Writer.hxx>
 #include <Quantity_Color.hxx>
 #include <STEPCAFControl_Reader.hxx>
-#include <STEPControl_Writer.hxx>
+#include <STEPCAFControl_Writer.hxx>
 #include <StlAPI_Reader.hxx>
 #include <StlAPI_Writer.hxx>
+#include <TCollection_ExtendedString.hxx>
 #include <TDF_ChildIterator.hxx>
 #include <TDF_Label.hxx>
 #include <TDataStd_Name.hxx>
@@ -40,6 +41,7 @@ public:
 };
 
 EMSCRIPTEN_DECLARE_VAL_TYPE(ShapeNodeArray)
+EMSCRIPTEN_DECLARE_VAL_TYPE(StringArray)
 
 struct ShapeNode {
     std::optional<TopoDS_Shape> shape;
@@ -386,15 +388,45 @@ public:
         return parseNodeFromDocument(document);
     }
 
-    static std::string convertToStep(const ShapeArray& input)
+    // Names and colors survive a STEP round-trip only through XCAF: the plain
+    // STEPControl_Writer has nowhere to put them, so exported bodies used to arrive
+    // unnamed while our importer (STEPCAFControl_Reader above) does read names.
+    // Each body becomes one top-level product; `names` and `colors` are parallel to
+    // `input`, an empty string means "not set".
+    static std::string convertToStep(const ShapeArray& input, const StringArray& names, const StringArray& colors)
     {
         auto shapes = vecFromJSArray<TopoDS_Shape>(input);
-        std::ostringstream oss;
-        STEPControl_Writer stepWriter;
-        for (const auto& shape : shapes) {
-            stepWriter.Transfer(shape, STEPControl_AsIs);
+        auto shapeNames = vecFromJSArray<std::string>(names);
+        auto shapeColors = vecFromJSArray<std::string>(colors);
+
+        Handle(TDocStd_Document) document = new TDocStd_Document("bincaf");
+        TDF_Label mainLabel = document->Main();
+        Handle(XCAFDoc_ShapeTool) shapeTool = XCAFDoc_DocumentTool::ShapeTool(mainLabel);
+        Handle(XCAFDoc_ColorTool) colorTool = XCAFDoc_DocumentTool::ColorTool(mainLabel);
+
+        for (size_t i = 0; i < shapes.size(); ++i) {
+            // makeAssembly = false: a body is one part, not an assembly of its solids
+            TDF_Label label = shapeTool->AddShape(shapes[i], false);
+            if (i < shapeNames.size() && !shapeNames[i].empty()) {
+                // isMultiByte = true: names come from the browser as UTF-8
+                TDataStd_Name::Set(label, TCollection_ExtendedString(shapeNames[i].c_str(), true));
+            }
+            Quantity_Color color;
+            if (i < shapeColors.size() && !shapeColors[i].empty()
+                && Quantity_Color::ColorFromHex(shapeColors[i].c_str(), color)) {
+                colorTool->SetColor(label, color, XCAFDoc_ColorGen);
+            }
         }
-        stepWriter.WriteStream(oss);
+
+        STEPCAFControl_Writer cafWriter;
+        cafWriter.SetNameMode(true);
+        cafWriter.SetColorMode(true);
+        if (!cafWriter.Transfer(document, STEPControl_AsIs)) {
+            return std::string();
+        }
+
+        std::ostringstream oss;
+        cafWriter.WriteStream(oss);
         return oss.str();
     }
 
@@ -433,6 +465,7 @@ EMSCRIPTEN_BINDINGS(Converter)
     register_optional<ShapeNode>();
 
     register_type<ShapeNodeArray>("Array<ShapeNode>");
+    register_type<StringArray>("Array<string>");
 
     class_<ShapeNode>("ShapeNode")
         .property("shape", &ShapeNode::shape, return_value_policy::reference())

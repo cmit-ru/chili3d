@@ -8,8 +8,10 @@ import {
     type INode,
     type IShape,
     type Matrix4,
+    type ModelManager,
     PubSub,
     Result,
+    type StepExportPart,
     type VisualNode,
 } from "@chili3d/core";
 import { createMockDocument, MockShape, TestNode } from "@chili3d/core/test-utils";
@@ -297,7 +299,9 @@ describe("DefaultDataExchange", () => {
                     (_shapes: IShape[], _options?: { binary: boolean }) =>
                         Result.ok(new Uint8Array([1, 2, 3])) as Result<BlobPart>,
                 ),
-                convertToSTEP: rs.fn((..._shapes: IShape[]) => Result.ok("step-data") as Result<BlobPart>),
+                convertToSTEP: rs.fn(
+                    (_parts: StepExportPart[]) => Result.ok("step-data") as Result<BlobPart>,
+                ),
                 convertToIGES: rs.fn((..._shapes: IShape[]) => Result.ok("iges-data") as Result<BlobPart>),
                 convertToBrep: rs.fn((_shape: IShape) => Result.ok("brep-data") as Result<BlobPart>),
             };
@@ -368,25 +372,52 @@ describe("DefaultDataExchange", () => {
             expect(converter.convertToBrep).not.toHaveBeenCalled();
         });
 
-        test.each([
-            { type: ".step", method: "convertToSTEP", data: "step-data" },
-            { type: ".iges", method: "convertToIGES", data: "iges-data" },
-        ] as const)("should route $type to shapeConverter.$method with the transformed shape", async ({
-            type,
-            method,
-            data,
-        }) => {
+        test("should route .iges to shapeConverter.convertToIGES with the transformed shape", async () => {
             const converter = stubShapeConverter();
             const doc = createMockDocument();
             const { node, transformed, transformedMul } = createShapeNode(doc, "cad-node");
 
-            const result = await exchange.export(type, [node]);
+            const result = await exchange.export(".iges", [node]);
 
-            expect(result).toEqual([data]);
+            expect(result).toEqual(["iges-data"]);
             expect(transformedMul).toHaveBeenCalledTimes(1);
-            expect(converter[method]).toHaveBeenCalledTimes(1);
-            expect(converter[method]).toHaveBeenCalledWith(transformed);
+            expect(converter.convertToIGES).toHaveBeenCalledTimes(1);
+            expect(converter.convertToIGES).toHaveBeenCalledWith(transformed);
             expect(converter.convertToSTL).not.toHaveBeenCalled();
+        });
+
+        // STEP carries names and colors (XCAF), so the exporter hands over parts, not bare shapes
+        test("should route .step to shapeConverter.convertToSTEP with the node name", async () => {
+            const converter = stubShapeConverter();
+            const doc = createMockDocument();
+            const { node, transformed, transformedMul } = createShapeNode(doc, "cad-node");
+
+            const result = await exchange.export(".step", [node]);
+
+            expect(result).toEqual(["step-data"]);
+            expect(transformedMul).toHaveBeenCalledTimes(1);
+            expect(converter.convertToSTEP).toHaveBeenCalledTimes(1);
+            expect(converter.convertToSTEP).toHaveBeenCalledWith([
+                { shape: transformed, name: "cad-node", color: undefined },
+            ]);
+            expect(converter.convertToSTL).not.toHaveBeenCalled();
+        });
+
+        test("should pass the node material color to convertToSTEP as a hex string", async () => {
+            const converter = stubShapeConverter();
+            const doc = createMockDocument({
+                modelManager: {
+                    materials: [{ id: "mat-1", color: 0xff8800 }],
+                } as unknown as Partial<ModelManager>,
+            });
+            const { node, transformed } = createShapeNode(doc, "colored-node");
+            node.materialId = "mat-1";
+
+            await exchange.export(".step", [node]);
+
+            expect(converter.convertToSTEP).toHaveBeenCalledWith([
+                { shape: transformed, name: "colored-node", color: "#ff8800" },
+            ]);
         });
 
         test("should route .brep through shapeFactory.combine then convertToBrep and dispose the compound", async () => {
@@ -450,7 +481,9 @@ describe("DefaultDataExchange", () => {
 
             expect(result).toEqual(["step-data"]);
             expect(converter.convertToSTEP).toHaveBeenCalledTimes(1);
-            expect(converter.convertToSTEP).toHaveBeenCalledWith(transformed);
+            expect(converter.convertToSTEP).toHaveBeenCalledWith([
+                { shape: transformed, name: "real-shape-node", color: undefined },
+            ]);
             expect(pubSpy).not.toHaveBeenCalledWith("showToast", "error.export.noNodeCanBeExported");
         });
     });

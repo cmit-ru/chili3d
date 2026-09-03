@@ -101,7 +101,7 @@ describe("BREP conversion", () => {
 describe("STEP conversion", () => {
     test("box → STEP produces valid STEP content", () => {
         const box = createBox(factory, 10, 10, 10);
-        const result = converter.convertToSTEP(box);
+        const result = converter.convertToSTEP([{ shape: box }]);
         expect(result.isOk).toBe(true);
         const step = result.value;
         expect(typeof step).toBe("string");
@@ -114,14 +114,36 @@ describe("STEP conversion", () => {
     test("multiple shapes to STEP", () => {
         const box = createBox(factory, 10, 10, 10);
         const sphere = unwrapOk(factory.sphere(XYZ.zero, 5));
-        const result = converter.convertToSTEP(box, sphere);
+        const result = converter.convertToSTEP([{ shape: box }, { shape: sphere }]);
         expect(result.isOk).toBe(true);
         expect(result.value.length).toBeGreaterThan(0);
     });
 
     test("convertToSTEP with non-OccShape throws", () => {
         const fake = new MockShape({ shapeType: ShapeTypes.solid });
-        expect(() => converter.convertToSTEP(fake)).toThrow("Shape is not an OccShape");
+        expect(() => converter.convertToSTEP([{ shape: fake }])).toThrow("Shape is not an OccShape");
+    });
+
+    test("body names and colors reach the STEP text", () => {
+        const roof = createBox(factory, 10, 10, 4);
+        const house = createBox(factory, 20, 20, 20);
+        const pipe = unwrapOk(factory.cylinder(XYZ.unitZ, XYZ.zero, 2, 15));
+
+        const step = unwrapOk(
+            converter.convertToSTEP([
+                { shape: roof, name: "roof", color: "#FF8800" },
+                { shape: house, name: "house", color: "#3F8AC2" },
+                { shape: pipe, name: "pipe" },
+            ]),
+        );
+
+        // XCAF writes one PRODUCT per body, and its name is the body name
+        expect(step).toContain("PRODUCT('roof','roof'");
+        expect(step).toContain("PRODUCT('house','house'");
+        expect(step).toContain("PRODUCT('pipe','pipe'");
+        // colors ride along as STEP styles (OCCT names the pure ones, so use mixed shades here)
+        expect(step).toContain("COLOUR_RGB");
+        expect(step).toContain("STYLED_ITEM('color'");
     });
 });
 

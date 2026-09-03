@@ -5,7 +5,7 @@ import { EditableShapeNode, type INodeLinkedList, ShapeTypes, XYZ } from "@chili
 import { createMockDocument, MockShape } from "@chili3d/core/test-utils";
 import type { OccShapeConverter } from "../src/converter";
 import type { ShapeFactory } from "../src/factory";
-import { createBox, createTestConverter, createTestFactory } from "./helpers";
+import { createBox, createTestConverter, createTestFactory, unwrapOk } from "./helpers";
 import "./setup";
 
 let factory: ShapeFactory;
@@ -19,7 +19,7 @@ beforeEach(() => {
 describe("STEP import", () => {
     test("should convert box to STEP and import back as a solid node", () => {
         const box = createBox(factory, 10, 20, 30);
-        const stepStr = converter.convertToSTEP(box).value;
+        const stepStr = converter.convertToSTEP([{ shape: box }]).value;
         expect(stepStr).toContain("ISO-10303-21");
 
         const stepBytes = new TextEncoder().encode(stepStr);
@@ -34,6 +34,16 @@ describe("STEP import", () => {
         expect(shape.value.shapeType).toBe(ShapeTypes.solid);
     });
 
+    test("should keep a body name written in Russian through export and import", () => {
+        const box = createBox(factory, 10, 10, 10);
+        const stepStr = unwrapOk(converter.convertToSTEP([{ shape: box, name: "Крыша" }]));
+
+        const doc = createMockDocument();
+        const result = converter.convertFromSTEP(doc, new TextEncoder().encode(stepStr));
+        expect(result.isOk).toBe(true);
+        expect(result.value.firstChild?.name).toBe("Крыша");
+    });
+
     test("should return error for invalid STEP data", () => {
         const invalidData = new TextEncoder().encode("not a valid step file");
         const doc = createMockDocument();
@@ -43,7 +53,7 @@ describe("STEP import", () => {
 
     test("should import STEP containing a comment longer than the OCCT lexer buffer", () => {
         const box = createBox(factory, 10, 20, 30);
-        const stepStr = converter.convertToSTEP(box).value;
+        const stepStr = converter.convertToSTEP([{ shape: box }]).value;
         // OCCT's STEP lexer cannot match tokens longer than its 16KB input buffer,
         // so a long comment line must be stripped before reading
         const longComment = `/*${"x".repeat(32 * 1024)}*/`;
@@ -59,7 +69,7 @@ describe("STEP import", () => {
 
     test("should handle cylinder STEP import", () => {
         const cyl = factory.cylinder(XYZ.unitZ, XYZ.zero, 5, 20).value;
-        const stepStr = converter.convertToSTEP(cyl).value;
+        const stepStr = converter.convertToSTEP([{ shape: cyl }]).value;
 
         const stepBytes = new TextEncoder().encode(stepStr);
         const doc = createMockDocument();
