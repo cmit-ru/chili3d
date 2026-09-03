@@ -10,7 +10,7 @@
 //     ребёнок, а правки живут в буфере;
 //   • перед уходом со страницы пробуем сохранить последнее состояние.
 
-import type { IApplication, IDocument } from "@chili3d/core";
+import type { Act, IApplication, IDocument } from "@chili3d/core";
 
 const IDLE_MS = 12_000; // тишина после последней правки
 const MAX_MS = 60_000; // потолок при непрерывном черчении
@@ -38,6 +38,17 @@ export class AutoSave {
         if (this.attached.has(document)) return;
         this.attached.add(document);
         document.history.onChanged = () => this.schedule(document);
+
+        // «Виды» живут мимо истории: их заводят, убирают и переименовывают без
+        // отмены, и история о них молчит (B-163). Слушаем сам список и имя
+        // каждого вида — иначе новый вид жил бы только до перезагрузки.
+        const touched = () => this.schedule(document);
+        const followName = (act: Act) => act.onPropertyChanged(touched);
+        document.acts.forEach(followName);
+        document.acts.onCollectionChanged((args) => {
+            if (args.action === "add") args.items.forEach(followName);
+            touched();
+        });
     }
 
     private clearTimers() {

@@ -33,8 +33,10 @@ import {
     EditableShapeNode,
     FolderNode,
     GeometryNode,
+    GeometryUtils,
     type IApplication,
     type IDocument,
+    type IFace,
     type INode,
     type IShape,
     Line,
@@ -143,6 +145,18 @@ const OP_COMMANDS: Record<string, string> = {
 
 /** Поля, которые можно менять операцией «изменить» — сеттеры параметрических узлов. */
 const EDITABLE_FIELDS = new Set(["dx", "dy", "dz", "radius", "sides", "length", "angle"]);
+
+/**
+ * Высота выдавливания в терминах ядра. Ядро тянет вдоль нормали сечения, а
+ * нормаль плоского контура зависит от того, в какую сторону перечислены его
+ * точки: по часовой — смотрит вниз. Ни ребёнок, ни помощник про обход не
+ * знают, для них положительная высота — всегда вверх (B-164). У стоячих
+ * сечений (нормаль в плоскости XY) направление оставляем ядру.
+ */
+export function высотаВверх(section: IShape, height: number): number {
+    const normal = GeometryUtils.normal(section as IFace);
+    return normal.z < -1e-6 ? -height : height;
+}
 
 export class AiOps {
     private busy = false;
@@ -749,10 +763,11 @@ export class AiOps {
             }
             case "выдавить": {
                 const source = this.node(op.node);
+                const section = this.shapeOf(source);
                 const node = new ExtrudeNode({
                     document: this.doc,
-                    section: this.shapeOf(source),
-                    length: Number(op.height),
+                    section,
+                    length: высотаВверх(section, Number(op.height)),
                 });
                 node.name = source.name || "Тело";
                 return this.replaceNode(stepNo, source, node);
