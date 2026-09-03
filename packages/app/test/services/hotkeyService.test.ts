@@ -312,6 +312,43 @@ describe("HotkeyService", () => {
 
             expect(publishedCommands.length).toBe(0);
         });
+
+        // Форк «Макетки»: у наших детей русская раскладка — см. `HotkeyService.буква`.
+        test("should fire ctrl+z in the Russian layout (key is «я», physical key is Z)", () => {
+            service.addMap({ "ctrl+z": "edit.undo" as CommandKeys });
+
+            const publishedCommands: CommandKeys[] = [];
+            PubSub.default.sub("executeCommand", (cmd: CommandKeys) => {
+                publishedCommands.push(cmd);
+            });
+
+            const event = new KeyboardEvent("keydown", { key: "я", code: "KeyZ", ctrlKey: true });
+            Object.defineProperty(event, "target", {
+                value: document.body,
+                writable: false,
+            });
+            window.dispatchEvent(event);
+
+            expect(publishedCommands).toEqual(["edit.undo"]);
+        });
+
+        test("should keep using e.key when no modifier is held", () => {
+            service.addMap({ z: "create.line" as CommandKeys });
+
+            const publishedCommands: CommandKeys[] = [];
+            PubSub.default.sub("executeCommand", (cmd: CommandKeys) => {
+                publishedCommands.push(cmd);
+            });
+
+            const event = new KeyboardEvent("keydown", { key: "я", code: "KeyZ" });
+            Object.defineProperty(event, "target", {
+                value: document.body,
+                writable: false,
+            });
+            window.dispatchEvent(event);
+
+            expect(publishedCommands.length).toBe(0);
+        });
     });
 
     // ── eventHandlerKeyDown ──────────────────────────────────────────

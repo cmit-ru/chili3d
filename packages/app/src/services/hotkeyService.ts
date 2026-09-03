@@ -97,11 +97,26 @@ export class HotkeyService implements IService {
         }
     };
 
+    /**
+     * Форк «Макетки»: с зажатым Ctrl буква берётся с ФИЗИЧЕСКОЙ клавиши, а не из
+     * раскладки. В русской раскладке `e.key` на клавише Z — «я», и `ctrl+z` не
+     * совпадал ни с чем: отмена не работала ровно у тех, для кого продукт сделан.
+     * Без модификаторов остаётся `e.key` — там важен введённый символ.
+     */
+    private static буква(e: KeyboardEvent): string {
+        if (!(e.ctrlKey || e.metaKey || e.altKey)) return e.key.toLowerCase();
+        const letter = /^Key([A-Z])$/.exec(e.code);
+        if (letter) return letter[1].toLowerCase();
+        const digit = /^Digit([0-9])$/.exec(e.code);
+        if (digit) return digit[1];
+        return e.key.toLowerCase();
+    }
+
     private readonly commandKeyDown = (e: KeyboardEvent) => {
         if (!this.canHandleKey(e)) return;
 
         const keys: Keys = {
-            key: e.key.toLowerCase(),
+            key: HotkeyService.буква(e),
             ctrlKey: e.ctrlKey || e.metaKey,
             shiftKey: e.shiftKey,
             altKey: e.altKey,

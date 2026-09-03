@@ -259,7 +259,7 @@ export class FrameBar {
             people.style.gap = "8px";
             people.append(this.helpBox());
             if (options.user) this.renderUser(people, options.user);
-            else people.append(this.loginButton());
+            else people.append(...this.guestButtons());
         }
 
         this.updateName();
@@ -606,13 +606,24 @@ export class FrameBar {
 
     /* ---------- зона «человек» ---------- */
 
-    /** Гость: вместо аватара одна дверь — «Войти» (`frame-contract.md`, «Роли»). */
-    private loginButton() {
+    /** Гость: вместо аватара одна дверь — «Войти» (`frame-contract.md`, «Роли»).
+     *  Рядом с ней — отзыв: у гостя нет меню человека, а сообщить об ошибке он
+     *  должен мочь ровно так же, как ученик. Обе кнопки тихие и одинаковые. */
+    private guestButtons(): HTMLElement[] {
         const login = document.createElement("a");
         login.href = "/login";
         login.textContent = "Войти";
         login.style.cssText = GHOST_LINK;
-        return login;
+
+        if (!this.options.feedback) return [login];
+
+        const feedback = document.createElement("button");
+        feedback.type = "button";
+        feedback.textContent = "Что-то не так?";
+        feedback.title = "Рассказать нам, что не работает или чего не хватает";
+        feedback.style.cssText = `${GHOST_LINK} font: inherit; font-size: 13px;`;
+        feedback.onclick = () => this.options.feedback?.();
+        return [feedback, login];
     }
 
     /**

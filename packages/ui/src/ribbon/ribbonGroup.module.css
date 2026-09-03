@@ -47,7 +47,10 @@
     }
 
     .content {
-        height: 72px;
+        /* 78 = 4 (свои отступы) + 8 (отступы кнопки) + 30 значок + 4 зазор +
+           2 строки подписи по 14. При прежних 72 вторая строка не помещалась
+           и срезалась `overflow: hidden`. */
+        height: 78px;
         flex-shrink: 0;
         display: flex;
         flex-direction: row;
@@ -77,7 +80,10 @@
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     min-width: 160px;
-    overflow: hidden;
+    /* Список «Ещё» длинный (в «Инструментах» 17 команд): ограничиваем высоту
+       экраном и прокручиваем, иначе нижние пункты уезжают за край окна. */
+    max-height: calc(100vh - 160px);
+    overflow: hidden auto;
     box-sizing: border-box;
     padding: 8px;
     gap: 8px;
@@ -93,9 +99,12 @@
     cursor: default;
     user-select: none;
     padding: 4px;
-    width: 72px;
+    /* Пункт занимает всю ширину меню, а не 72 px: в 72 px не помещалась ни одна
+       длинная подпись («Контур с отступом», «Сгруппировать»), и `overflow:
+       hidden` резал её на полуслове. */
+    width: 100%;
+    box-sizing: border-box;
     border-radius: 4px;
-    overflow: hidden;
 }
 
 .collapsedDropdownItem:hover {
@@ -112,5 +121,7 @@
 .collapsedDropdownText {
     color: var(--foreground-color);
     font-size: 12px;
-    white-space: nowrap;
+    /* Подпись, которая не влезла в ширину меню, переносится, а не обрезается. */
+    white-space: normal;
+    overflow-wrap: break-word;
 }

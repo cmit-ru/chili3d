@@ -1,9 +1,11 @@
 // Part of the Chili3d Project, under the AGPL-3.0 License.
 // See LICENSE file in the project root for full license information.
 //
-// Форк «Макетки»: отзыв из мастерской (B-101). Ценность кнопки — в том, что
+// Форк «Макетки»: отзыв из мастерской (B-101). Ценность отзыва — в том, что
 // человеку не приходится ничего объяснять: номер работы, версия, браузер и кадр
 // экрана уходят сами. Тест держит именно это — состав письма, а не оформление.
+// Дверь в отзыв одна и живёт в шапке (`frameBar.ts`), поэтому окно здесь
+// открывается вызовом `open()`, а не нажатием на кнопку в углу.
 
 import { Feedback } from "../src/feedback";
 
@@ -17,6 +19,11 @@ interface Отправленное {
 }
 
 const запросы: { url: string; body: Отправленное }[] = [];
+
+/** Снимок готовится обещанием — даём микрозадачам провернуться. */
+const провернуть = async () => {
+    for (let i = 0; i < 12; i++) await Promise.resolve();
+};
 
 function ответ(status: number, data: unknown) {
     return Promise.resolve({
@@ -50,35 +57,42 @@ describe("Отзыв из мастерской", () => {
         new Feedback({
             projectId: "42",
             context: () => ({ rev: 5, карточка: "Брелок" }),
-            shot: () => "data:image/jpeg;base64,AAAA",
-        });
-        (document.querySelector("[data-fb-open]") as HTMLButtonElement).click();
+            shot: async () => "data:image/jpeg;base64,AAAA",
+        }).open();
     };
 
-    test("кнопка стоит в углу мастерской и открывает окно", () => {
-        new Feedback({ projectId: "42" });
-        const button = document.querySelector("[data-fb-open]") as HTMLButtonElement;
-        expect(button).not.toBeNull();
-        expect(button.textContent).toBe("Что-то не так?");
+    test("своей кнопки в углу нет — окно открывает шапка", () => {
+        const отзыв = new Feedback({ projectId: "42" });
+        expect(document.querySelector("[data-fb-open]")).toBeNull();
         expect(document.querySelector("[data-fb-send]")).toBeNull();
 
-        button.click();
+        отзыв.open();
         expect(document.querySelector("[data-fb-send]")).not.toBeNull();
     });
 
-    test("кадр экрана показан заранее — видно, что именно уйдёт", () => {
+    test("гость без номера работы тоже может написать", () => {
+        const отзыв = new Feedback({ projectId: null });
+        отзыв.open();
+        expect(document.querySelector("[data-fb-send]")).not.toBeNull();
+    });
+
+    test("кадр экрана показан заранее — видно, что именно уйдёт", async () => {
         открыть();
+        // Пока снимок рисуется, на его месте заглушка, а не пустота.
+        expect((document.querySelector("[data-fb-shot-wait]") as HTMLElement).hidden).toBe(false);
+        expect((document.querySelector("[data-fb-send]") as HTMLButtonElement).disabled).toBe(false);
+
+        await провернуть();
         const превью = document.querySelector("img") as HTMLImageElement;
         expect(превью.hidden).toBe(false);
         expect(превью.src).toContain("data:image/jpeg");
+        expect((document.querySelector("[data-fb-shot-wait]") as HTMLElement).hidden).toBe(true);
     });
 
     test("отправка в два нажатия: открыть и отправить", async () => {
         открыть();
         (document.querySelector("[data-fb-send]") as HTMLButtonElement).click();
-        await Promise.resolve();
-        await Promise.resolve();
-        await Promise.resolve();
+        await провернуть();
 
         expect(запросы).toHaveLength(1);
         const { url, body } = запросы[0];
@@ -100,9 +114,7 @@ describe("Отзыв из мастерской", () => {
         (document.querySelector('[data-kind="idea"]') as HTMLButtonElement).click();
         (document.querySelector("[data-fb-text]") as HTMLTextAreaElement).value = "пусть будет цвет";
         (document.querySelector("[data-fb-send]") as HTMLButtonElement).click();
-        await Promise.resolve();
-        await Promise.resolve();
-        await Promise.resolve();
+        await провернуть();
 
         expect(запросы[0].body.kind).toBe("idea");
         expect(запросы[0].body.message).toBe("пусть будет цвет");
@@ -114,9 +126,7 @@ describe("Отзыв из мастерской", () => {
         галка.checked = false;
         галка.dispatchEvent(new Event("change"));
         (document.querySelector("[data-fb-send]") as HTMLButtonElement).click();
-        await Promise.resolve();
-        await Promise.resolve();
-        await Promise.resolve();
+        await провернуть();
 
         expect(запросы[0].body.shot).toBeNull();
     });
@@ -127,7 +137,7 @@ describe("Отзыв из мастерской", () => {
         открыть();
         const send = document.querySelector("[data-fb-send]") as HTMLButtonElement;
         send.click();
-        for (let i = 0; i < 6; i++) await Promise.resolve();
+        await провернуть();
 
         const note = document.querySelector("[data-fb-error]") as HTMLElement;
         expect(note?.textContent).toContain("уже получили");

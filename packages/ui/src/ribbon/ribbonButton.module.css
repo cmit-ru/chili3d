@@ -43,23 +43,32 @@
     background-color: var(--active-background-color);
 }
 
-.largeButtonText .smallButtonText {
-    color: var(--foreground-color);
-    white-space: normal;
-    word-break: break-word;
-    overflow: visible;
-    width: 100%;
-    display: block;
-}
-
-.largeButtonText {
-    font-size: 12px;
-    text-align: center;
-}
-
+/* Было `.largeButtonText .smallButtonText` — селектор потомка вместо списка
+   через запятую. Такой пары в разметке нет, поэтому правила не доставались
+   никому: длинные подписи не переносились по словам и обрезались низом группы
+   («Выровнять камеру», «Добавить деталь», «Простой Полигон»), а в тёмной теме
+   подписи оставались чёрными, потому что цвет тоже не применялся. */
+.largeButtonText,
 .smallButtonText {
+    color: var(--foreground-color);
     font-size: 12px;
+    line-height: 14px;
+}
+
+/* Подпись большой кнопки переносится по словам на вторую строку. */
+.largeButtonText {
+    text-align: center;
+    white-space: normal;
+    overflow-wrap: break-word;
+    display: block;
+    width: 100%;
+}
+
+/* Маленькие кнопки стоят стопкой в полосе постоянной высоты: вторая строка
+   выдавила бы третью кнопку за нижний край, поэтому здесь переносов нет. */
+.smallButtonText {
     text-align: left;
+    white-space: nowrap;
 }
 
 .icon {

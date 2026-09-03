@@ -7,10 +7,16 @@
     bottom: 12px;
     z-index: 99999;
     width: 100%;
-    pointer-events: all;
+    /* Контейнер тянется во всю ширину окна и на ~100 px вверх от статусной
+       строки, а видимая панель занимает в нём только середину. С
+       `pointer-events: all` вся эта пустая полоса перехватывала щелчки поверх
+       всего, что лежит в нижнем углу: кнопка «Что-то не так?» попадала в неё
+       целиком и не нажималась. Щелчки принимает сама панель, а не полоса. */
+    pointer-events: none;
 
     .border {
         display: inline-block;
+        pointer-events: all;
         position: relative;
         margin: auto;
         width: fit-content;

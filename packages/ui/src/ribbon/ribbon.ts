@@ -18,7 +18,7 @@ import {
     type RibbonTab,
     type RibbonTabKeys,
 } from "@chili3d/core";
-import { a, collection, createIcon, div, label, span, svg } from "@chili3d/element";
+import { a, collection, createIcon, div, img, label, span } from "@chili3d/element";
 import style from "./ribbon.module.css";
 import { RibbonPushButton } from "./ribbonButton";
 import { RibbonGroupElement } from "./ribbonGroup";
@@ -144,7 +144,12 @@ export class RibbonUI extends HTMLElement {
                     href: back.href,
                     dataset: { frameZone: "знак" },
                 },
-                svg({ className: style.icon, icon: "icon-chili" }),
+                // Знак «Макетки» — тот же файл, что во вкладке браузера и в шапке
+                // мастерской схем (`favicon.svg`). Спрайт `iconfont.js` — сгенерированный
+                // файл исходного Chili3D в двух копиях; класть туда наш знак значило бы
+                // завести третью копию картинки. Путь абсолютный: адрес мастерской —
+                // `/3d/<номер>`, и относительный `favicon.svg` уехал бы в `/3d/<номер>/`.
+                img({ className: style.icon, src: "/3d/favicon.svg", alt: "" }),
                 span({ id: "appName", textContent: BRAND_NAME }),
                 // Подпись возврата («← К примерам», «← К группам», «← Мои работы»)
                 // приходит от сервера вместе с адресом. Её нет только у запасного
@@ -166,6 +171,7 @@ export class RibbonUI extends HTMLElement {
 
     private createRibbonHeader() {
         return collection({
+            className: style.tabHeaders,
             sources: this.dataContent.tabs,
             template: (tab: RibbonTab) => {
                 const converter = new ActivedRibbonTabConverter(tab, style.tabHeader, style.activedTab);

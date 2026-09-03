@@ -42,7 +42,9 @@ rs.mock("@chili3d/core", () => {
     return {
         ...actual,
         Config: { instance: configChanged.instance },
-        I18n: { set: i18nSetMock },
+        // `translate` подменяется вместе со всем namespace: без него конструктор
+        // падает на подписи навигации, и в этом файле не проходил ни один тест.
+        I18n: { set: i18nSetMock, translate: (key: string) => key },
         Navigation3D: {
             navigationKeyMap: () => ({ pan: "Middle", rotate: "Shift+Middle" }),
         },

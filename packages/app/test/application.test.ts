@@ -78,6 +78,8 @@ function resetAppState() {
     sharedApp.activeView = undefined;
     sharedApp.executingCommand = undefined;
     sharedApp.lastCommand = undefined;
+    // Форк «Макетки»: обработчик возврата работы ставит оболочка (B-117).
+    sharedApp.openWorkFiles = undefined;
     // Restore collaborators that individual tests may have overridden
     sharedApp.storage.get = async () => undefined;
     sharedApp.dataExchange.import = async () => {};
@@ -501,6 +503,36 @@ describe("Application", () => {
             expect(doc).not.toBeUndefined();
             expect(doc!.name).toBe("DroppedDoc");
             expect(sharedApp.activeView?.document).toBe(doc);
+        });
+
+        // Форк «Макетки», B-117: файл работы возвращается новой работой на
+        // сервере, а не открывается вторым документом в браузере — за таким
+        // документом не следит автосохранение, и он пропадает вместе с вкладкой.
+        test("openWorkFiles takes over .cd files instead of opening a stray document", async () => {
+            const data = makeSerializedDocData("FromFile", "from-file-1");
+            const file = new File([JSON.stringify(data)], "work.cd");
+            const taken: File[][] = [];
+            const pubSpy = rs.spyOn(PubSub.default, "pub");
+            sharedApp.openWorkFiles = (files) => taken.push(files);
+
+            await sharedApp.importFiles([file]);
+
+            expect(taken).toEqual([[file]]);
+            // Ни второго документа, ни полосы выполнения: файл ушёл оболочке.
+            expect([...sharedApp.documents].some((d) => d.id === "from-file-1")).toBe(false);
+            expect(pubSpy).not.toHaveBeenCalled();
+            pubSpy.mockRestore();
+        });
+
+        // Соседняя команда «Добавить деталь» осталась прежней: обработчик
+        // оболочки не должен перехватывать обычные файлы деталей.
+        test("openWorkFiles is not called for ordinary part files", async () => {
+            const taken: File[][] = [];
+            sharedApp.openWorkFiles = (files) => taken.push(files);
+
+            await sharedApp.importFiles([new File([""], "part.step")]);
+
+            expect(taken).toEqual([]);
         });
     });
 

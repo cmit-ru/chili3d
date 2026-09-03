@@ -11,11 +11,28 @@
     background-color: rgba(128, 128, 128, 0.45);
 }
 
+/* Полоса мастерской белая в обеих темах — ровно как в мастерской схем
+   (`agent_docs/frame-contract.md`, строки «фон полосы», «наведение в полосе»,
+   «текст полосы»). Тема Chili3D красила её в `--background-color`, и в 3D полоса
+   получалась серой (тёмной), а в схемах белой — один продукт, две разные шапки.
+   Поэтому цвета здесь заданы прямо, а не темой: полоса общая для двух мастерских,
+   а тема — только у 3D. Отступ переехал из `margin` в `padding`, чтобы белое шло
+   от края до края, а внутренняя геометрия не поехала. */
 .titleBar {
     display: flex;
     flex-direction: row;
     align-items: center;
-    margin: 2px 4px;
+    padding: 2px 4px;
+    background-color: #fff;
+    color: #1e293b;
+
+    /* Общее правило `p, span, div { color: var(--foreground-color) }` из
+       mainWindow.module.css в тёмной теме сделало бы надписи белыми по белому. */
+    p,
+    span,
+    div {
+        color: inherit;
+    }
 
     .left {
         display: flex;
@@ -36,7 +53,7 @@
             text-decoration: none;
 
             &:hover {
-                background-color: var(--hover-background-color);
+                background-color: #eef2f1;
             }
 
             .icon {
@@ -56,7 +73,7 @@
                 margin-left: 10px;
                 font-weight: normal;
                 font-size: 12.5px;
-                color: var(--foreground-muted-color, #4a625b);
+                color: #4a625b;
             }
         }
     }
@@ -88,7 +105,7 @@
             border-radius: 4px;
 
             &:hover {
-                background-color: var(--hover-background-color);
+                background-color: #eef2f1;
             }
         }
     }
@@ -113,33 +130,42 @@
             margin: 0px 6px;
 
             &:hover {
-                background-color: var(--hover-background-color);
+                background-color: #eef2f1;
             }
         }
     }
 
+    /* Разделы команд, а не вкладки документов. Раньше активный раздел был
+       подчёркнут язычком вплотную к панели под ним — ровно так рисуют открытые
+       документы, и полоса читалась как «здесь открыто несколько работ». Работа
+       на странице одна (вкладок работ в «Макетке» нет), поэтому здесь ряд
+       сегментов-пилюль: выбранный сегмент залит, остальные — приглушённый
+       текст. Скругление 6 px, приглушённый `#4a625b`, наведение `#eef2f1` —
+       токены из `agent_docs/frame-contract.md`. Зелёной заливки тут нет
+       намеренно: она в полосе ровно одна, у главного действия. */
+    .tabHeaders {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 2px;
+    }
+
     .tabHeader {
-        color: var(--titlebar-forground-color);
-        padding: 5px 15px;
+        color: #4a625b;
+        padding: 4px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        user-select: none;
 
         &:hover {
-            -webkit-text-stroke: 0.65px var(--foreground-color);
-            background-color: var(--hover-background-color);
+            background-color: #eef2f1;
         }
     }
 
     .activedTab {
-        position: relative;
-
-        &::after {
-            content: "";
-            position: absolute;
-            bottom: -2px;
-            left: 8px;
-            right: 8px;
-            height: 3px;
-            background-color: var(--primary-color);
-        }
+        background-color: #eef2f1;
+        color: #12211d;
+        font-weight: 600;
     }
 }
 

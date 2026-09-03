@@ -8,14 +8,16 @@
 // открывается поверх сцены, а всё, о чём иначе пришлось бы переспрашивать (какая
 // работа, какой браузер, что писала консоль, как выглядел экран), собирается само.
 //
-// Оформление кнопки тихое и по той же причине, что у «Открытого кода»: это служебная
-// дверь, а не элемент урока. В ленту команд её не ставим — лента приходит из upstream,
-// и своя кнопка в ней разъезжалась бы с каждым обновлением ядра.
+// Своей кнопки у отзыва нет: дверь в него одна и живёт в шапке — пункт «Что-то не
+// так?» в меню человека, а у гостя кнопка рядом с «Войти» (`frameBar.ts`). Так же
+// сделано в мастерской схем; прибитая плашка в углу закрывала статусную строку и
+// перекрывалась пустой полосой действий вьюпорта, из-за чего не нажималась.
 //
 // Контракт оболочки — cad-app `src/routes/feedback.js`:
 //   POST /api/feedback { editor, kind, message, projectId, context, shot } → { ok } | 429 { message }
 
 import { FRAME_FONT } from "./errorBanner";
+import { НЕ_СНИМАТЬ } from "./pageShot";
 
 const ВИДЫ: [string, string][] = [
     ["broken", "Что-то сломалось"],
@@ -84,39 +86,20 @@ const PRIMARY = `
 `;
 
 export interface FeedbackOptions {
-    /** Номер работы: отзыв без него бесполезен — непонятно, что смотреть. */
-    projectId: string;
+    /** Номер работы; в песочнице и на пустом входе его нет. */
+    projectId: string | null;
     /** Что добавить к автосбору: ревизия, карточка урока. */
     context?: () => Record<string, unknown>;
-    /** Кадр сцены в виде data-url; null, если снимать нечего. */
-    shot?: () => string | null;
+    /** Снимок для отзыва в виде data-url; null, если снимать нечего.
+     *  Обещанием: окно мастерской рисуется не мгновенно. */
+    shot?: () => Promise<string | null>;
 }
 
 export class Feedback {
-    private readonly button: HTMLButtonElement;
     private версия = "";
 
     constructor(private readonly options: FeedbackOptions) {
         перехватитьОшибки();
-
-        this.button = document.createElement("button");
-        this.button.type = "button";
-        this.button.textContent = "Что-то не так?";
-        this.button.title = "Рассказать нам, что не работает или чего не хватает";
-        this.button.setAttribute("data-fb-open", "");
-        this.button.dataset["framePlace"] = "bottom-right";
-        this.button.dataset["frameGroup"] = "corner-notices";
-        // Над «Открытым кодом» (right:12 bottom:8) — в том же углу и той же
-        // группой. Прозрачности нет: постоянная мелочь обязана читаться в
-        // обычном состоянии, а не при наведении (INV-010).
-        this.button.style.cssText = `
-            position: fixed; right: 12px; bottom: 38px; z-index: 300;
-            font-family: ${FRAME_FONT};
-            font-size: 12.5px; padding: 5px 8px; border-radius: 6px; cursor: pointer;
-            min-height: 24px; border: 1px solid #c7d3ce; background: #fff; color: #4a625b;
-        `;
-        this.button.onclick = () => this.open();
-        document.body.appendChild(this.button);
     }
 
     /** Версия собранного редактора: тот же коммит, что показывает «Открытый код». */
@@ -133,6 +116,9 @@ export class Feedback {
 
     open() {
         const root = document.createElement("div");
+        // Снимок делается уже при открытом окне отзыва: без пометки картинка
+        // была бы почти целиком заслонена им самим.
+        root.setAttribute(НЕ_СНИМАТЬ, "");
         root.style.cssText = PANEL;
         const card = document.createElement("div");
         card.style.cssText = CARD;
@@ -203,6 +189,17 @@ export class Feedback {
         checkText.textContent = "Приложить картинку экрана";
         check.append(галка, checkText);
 
+        // Пока снимок рисуется, на его месте стоит заглушка: пустота выглядела
+        // бы так, будто картинку не приложат вовсе.
+        const место = document.createElement("div");
+        место.textContent = "Готовим картинку экрана…";
+        место.setAttribute("data-fb-shot-wait", "");
+        место.style.cssText = `
+            display: grid; place-items: center; min-height: 92px; border-radius: 6px;
+            border: 1px dashed var(--border-color, #c7d3ce); background: #f8fafc;
+            color: #4a625b; opacity: .8;
+        `;
+
         const превью = document.createElement("img");
         превью.alt = "Картинка экрана, которая уйдёт вместе с отзывом";
         превью.hidden = true;
@@ -221,19 +218,29 @@ export class Feedback {
         note.hidden = true;
         note.style.cssText = "line-height:1.4";
 
-        card.append(title, lede, tabs, label, check, превью, send, note);
+        card.append(title, lede, tabs, label, check, место, превью, send, note);
         document.body.appendChild(root);
         текст.focus();
 
-        // Кадр снимаем сразу: сцена на экране успеет измениться, пока человек пишет.
-        const картинка = this.options.shot?.() ?? null;
-        if (картинка) {
-            превью.src = картинка;
-            превью.hidden = false;
-        }
-        галка.onchange = () => {
-            превью.hidden = !(галка.checked && картинка);
+        // Снимок делаем сразу: экран успеет измениться, пока человек пишет.
+        // «Отправить» при этом не запираем — нажали раньше времени, отправка
+        // сама дождётся картинку.
+        const снимок = Promise.resolve(this.options.shot?.() ?? null).catch(() => null);
+        let картинка: string | null = null;
+        // Снимать нечем (окно открыто без него) — заглушке взяться неоткуда.
+        let готово = !this.options.shot;
+        const показать = () => {
+            место.hidden = готово || !галка.checked;
+            превью.hidden = !(готово && галка.checked && картинка);
         };
+        показать();
+        void снимок.then((данные) => {
+            готово = true;
+            картинка = данные;
+            if (данные) превью.src = данные;
+            показать();
+        });
+        галка.onchange = показать;
 
         const сказать = (text: string, ошибка = false) => {
             note.textContent = text;
@@ -255,7 +262,7 @@ export class Feedback {
                         kind: вид,
                         message: текст.value,
                         projectId: Number(this.options.projectId) || null,
-                        shot: галка.checked ? картинка : null,
+                        shot: галка.checked ? await снимок : null,
                         context: {
                             ...(this.options.context?.() ?? {}),
                             адрес: location.pathname + location.search,

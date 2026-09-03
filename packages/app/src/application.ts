@@ -50,6 +50,18 @@ export class Application extends Observable implements IApplication {
 
     lastCommand: CommandKeys | undefined;
 
+    /**
+     * Форк «Макетки»: куда девать файл работы (`.cd`), открытый ребёнком.
+     *
+     * Апстрим открывает такой файл вторым документом прямо в браузере — за ним
+     * не следит ни автосохранение, ни оболочка, и он пропадает вместе с
+     * вкладкой (B-117). Оболочка ставит сюда возврат работы на сервер
+     * (`packages/web/src/index.ts`), и к этой одной точке сходятся оба входа:
+     * окно выбора файла и перетаскивание на мастерскую. Без обработчика
+     * поведение остаётся апстримным.
+     */
+    openWorkFiles?: (files: File[]) => void;
+
     get executingCommand(): ICommand | undefined {
         return this.getPrivateValue("executingCommand", undefined);
     }
@@ -128,8 +140,14 @@ export class Application extends Observable implements IApplication {
             return;
         }
         const { opens, imports } = this.groupFiles(files);
-        this.loadDocumentsWithLoading(opens);
-        importFiles(this, imports);
+        if (opens.length > 0) {
+            if (this.openWorkFiles) this.openWorkFiles(opens);
+            else this.loadDocumentsWithLoading(opens);
+        }
+        // Пустой список тоже заводил документ «Untitled» и показывал полосу
+        // выполнения: `importFiles` создаёт документ до того, как посмотрит, что
+        // импортировать. При возврате `.cd` импортировать нечего.
+        if (imports.length > 0) importFiles(this, imports);
     }
 
     private loadDocumentsWithLoading(opens: File[]) {

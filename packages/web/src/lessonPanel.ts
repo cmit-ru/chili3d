@@ -5,8 +5,10 @@
 //
 // Ребёнок не должен переключаться между вкладкой с заданием и мастерской:
 // на уроке это гарантированные «а что дальше?» и очередь к преподавателю.
-// Отметки о выполненных шагах живут в браузере — это подсказка себе, а не
-// оценка, поэтому на сервер они не уходят.
+// Отметки о выполненных шагах — подсказка себе, а не оценка, но хранятся они
+// у аккаунта (B-118): занятия идут на общих компьютерах класса, и в браузере
+// галочки доставались следующему ученику, а при пересадке за другую машину
+// пропадали. В браузере остаётся копия — запасной путь на случай обрыва сети.
 
 import { type IDocument, type INode, PubSub } from "@chili3d/core";
 import { FRAME_FONT } from "./errorBanner";
@@ -18,10 +20,30 @@ export interface LessonCard {
     minutes: number;
 }
 
+/** Отметки, как их знают и панель, и сервер. */
+interface Отметки {
+    done: number[];
+    collapsed?: boolean;
+}
+
+/** На сервер уходит не каждый клик: шаги отмечают подряд. Такт тот же, что у
+ *  настроек рабочего места в мастерской схем. */
+const ЗАДЕРЖКА_МС = 800;
+
+/** Так каркас называет пришедшего без входа: у гостя аккаунта нет, и хранить
+ *  его отметки серверу негде — они остаются только в браузере. */
+const ГОСТЬ = "гость";
+
 export class LessonPanel {
     private root: HTMLElement;
     private list!: HTMLOListElement;
     private collapsed = false;
+    private done: number[] = [];
+    /** Свернуть/развернуть список: нужно и после ответа сервера, не только по клику. */
+    private fold: () => void = () => {};
+    /** Ребёнок успел щёлкнуть до ответа сервера — его отметки свежее ответа. */
+    private тронуто = false;
+    private таймер?: number;
 
     constructor(
         private readonly card: LessonCard,
@@ -45,7 +67,17 @@ export class LessonPanel {
             font-family: ${FRAME_FONT};
             font-size: 14px;
         `;
+        // Показываем сразу по браузерной копии: ждать ответа сервера, чтобы
+        // увидеть задание, ребёнок не должен.
+        const местные = this.местные();
+        this.принять(местные);
         this.render();
+        void this.подтянуть(местные);
+
+        if (this.userId !== ГОСТЬ) {
+            // Вкладку закрывают, не дождавшись такта: обычный запрос уже не успеет.
+            window.addEventListener("pagehide", () => this.досдать());
+        }
     }
 
     /**
@@ -56,7 +88,16 @@ export class LessonPanel {
         return `maketka.lesson.${this.userId}.${this.projectId}`;
     }
 
-    private state(): { done: number[]; collapsed?: boolean } {
+    private адрес() {
+        return `/api/projects/${this.projectId}/steps`;
+    }
+
+    private тело() {
+        return JSON.stringify({ done: this.done, collapsed: this.collapsed });
+    }
+
+    /** Отметки из браузера: запасной путь и наследство до B-118. */
+    private местные(): Отметки {
         try {
             const raw = JSON.parse(localStorage.getItem(this.storageKey()) ?? "[]");
             // Старый вид отметок — просто массив номеров шагов.
@@ -67,22 +108,82 @@ export class LessonPanel {
         }
     }
 
-    private doneSteps(): number[] {
-        return this.state().done;
+    /** По умолчанию панель развёрнута, но свёрнута, когда все шаги отмечены. */
+    private принять(отметки: Отметки) {
+        this.done = отметки.done;
+        this.collapsed = отметки.collapsed ?? отметки.done.length >= this.card.steps.length;
     }
 
-    private save(done: number[], collapsed: boolean) {
+    private запомнить() {
         try {
-            localStorage.setItem(this.storageKey(), JSON.stringify({ done, collapsed }));
+            localStorage.setItem(this.storageKey(), this.тело());
         } catch {
             // Приватный режим: отметки просто не сохранятся, урок не ломается.
         }
     }
 
+    /** Сервер знает, что ребёнок отмечал на другой машине, — это и есть истина. */
+    private async подтянуть(местные: Отметки) {
+        if (this.userId === ГОСТЬ) return;
+        let ответ: Отметки | undefined;
+        try {
+            const response = await fetch(this.адрес(), { credentials: "same-origin" });
+            // 401 без входа, 5xx — остаёмся на браузерных отметках.
+            if (!response.ok) return;
+            ответ = (await response.json()) as Отметки;
+        } catch {
+            return; // сети нет — урок идёт на браузерных отметках
+        }
+        if (Array.isArray(ответ?.done)) {
+            if (this.тронуто) return; // ребёнок уже щёлкал — его отметки новее
+            this.принять({ done: ответ.done, collapsed: ответ.collapsed });
+            this.renderSteps();
+            this.fold();
+            this.запомнить(); // копия в браузере = то, что на сервере
+            return;
+        }
+        // Сервер про эту работу не знает ничего: то, что ребёнок наотмечал в
+        // браузере раньше, переносим наверх, а не теряем.
+        if (местные.done.length || местные.collapsed !== undefined) this.отправить();
+    }
+
+    private сохранить() {
+        this.тронуто = true;
+        this.запомнить();
+        if (this.userId === ГОСТЬ) return; // хранить негде — аккаунта нет
+        window.clearTimeout(this.таймер);
+        this.таймер = window.setTimeout(() => this.отправить(), ЗАДЕРЖКА_МС);
+    }
+
+    private отправить() {
+        window.clearTimeout(this.таймер);
+        this.таймер = undefined;
+        void fetch(this.адрес(), {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: this.тело(),
+        }).catch(() => undefined); // не ушло — отметки остались в браузере
+    }
+
+    /** Последняя попытка при уходе со страницы: такт ждать уже некогда. */
+    private досдать() {
+        if (this.таймер === undefined) return;
+        window.clearTimeout(this.таймер);
+        this.таймер = undefined;
+        try {
+            navigator.sendBeacon?.(this.адрес(), new Blob([this.тело()], { type: "application/json" }));
+        } catch {
+            // Не ушло — отметки остались в браузере, оттуда и поднимутся.
+        }
+    }
+
     private toggleStep(index: number) {
-        const done = new Set(this.doneSteps());
+        const done = new Set(this.done);
         done.has(index) ? done.delete(index) : done.add(index);
-        this.save([...done], this.collapsed);
+        // По порядку шагов: так же их вернёт сервер, и браузерная копия с ним сходится.
+        this.done = [...done].sort((a, b) => a - b);
+        this.сохранить();
         this.renderSteps();
     }
 
@@ -110,7 +211,7 @@ export class LessonPanel {
 
         header.append(caret, title, minutes);
         header.setAttribute("aria-expanded", "true");
-        const fold = () => {
+        this.fold = () => {
             this.list.hidden = this.collapsed;
             header.setAttribute("aria-expanded", String(!this.collapsed));
             // Одного `hidden` мало: у списка инлайновый `display: grid`, а он сильнее
@@ -121,8 +222,8 @@ export class LessonPanel {
         };
         header.onclick = () => {
             this.collapsed = !this.collapsed;
-            fold();
-            this.save(this.doneSteps(), this.collapsed);
+            this.fold();
+            this.сохранить();
         };
 
         this.list = document.createElement("ol");
@@ -133,12 +234,7 @@ export class LessonPanel {
 
         this.root.append(header, this.list);
         this.renderSteps();
-
-        // По умолчанию: развёрнута при первом открытии работы, свёрнута, когда
-        // все шаги отмечены.
-        const state = this.state();
-        this.collapsed = state.collapsed ?? state.done.length >= this.card.steps.length;
-        fold();
+        this.fold();
 
         const sidebar = document.getElementById("editor-sidebar");
         if (sidebar) sidebar.insertBefore(this.root, sidebar.firstChild);
@@ -150,13 +246,13 @@ export class LessonPanel {
             if (nodes.length === 0 || this.collapsed) return;
             if (this.root.scrollHeight > this.root.clientHeight + 1) {
                 this.collapsed = true;
-                fold();
+                this.fold();
             }
         });
     }
 
     private renderSteps() {
-        const done = new Set(this.doneSteps());
+        const done = new Set(this.done);
         this.list.innerHTML = "";
 
         this.card.steps.forEach((step, index) => {

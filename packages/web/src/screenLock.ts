@@ -5,8 +5,8 @@
 //
 // Урок кончился, ребёнок ушёл, не нажав «выйти» — следующий садится за чужую
 // открытую работу. Замок закрывает экран и честно говорит, чей это компьютер.
-// Замок информационный: показывает владельца и даёт выйти (защита — «Выйти»,
-// PIN спрашивается при входе, не здесь). Через autoExitMinutes в замке —
+// Замок информационный: показывает владельца и даёт уступить место (личный код
+// спрашивают при входе, не здесь). Через autoExitMinutes в замке —
 // автовыход к «Кто ты?», но только когда всё дослано в облако: автовыход
 // не имеет права стоить ребёнку работы (ТЗ §4).
 
@@ -15,6 +15,8 @@ export interface LockOptions {
     minutes: number;
     /** Через сколько минут В ЗАМКЕ выходить к «Кто ты?» (0 — не выходить). */
     autoExitMinutes?: number;
+    /** Общий компьютер класса — от этого зависит слово на второй кнопке. */
+    sharedPc?: boolean;
     userName: string;
     userAvatar: string;
     /** Есть ли несохранённые правки — тогда честно предупреждаем. */
@@ -62,6 +64,9 @@ export class ScreenLock {
         }
 
         const overlay = document.createElement("div");
+        // Опора для браузерной спеки паритета: одинаковая в обеих мастерских
+        // (`agent_docs/frame-contract.md`, раздел «Экран-замок»).
+        overlay.setAttribute("data-frame-lock", "");
         overlay.style.cssText = `
             position: fixed; inset: 0; z-index: 1000;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -89,20 +94,20 @@ export class ScreenLock {
         const resume = document.createElement("button");
         resume.textContent = "Это я, продолжить";
         resume.style.cssText = `
-            font: inherit; font-weight: 600; padding: 13px 22px; border-radius: 4px;
+            font: inherit; font-weight: 600; padding: 13px 22px; border-radius: 6px;
             border: none; background: #35c79a; color: #04120e; cursor: pointer;
         `;
         resume.onclick = () => this.unlock();
 
-        const leave = document.createElement("a");
-        leave.textContent = "Выйти";
-        leave.href = "#";
+        // Замок видит только ученик, а ребёнку «Выйти» не говорят ни в шапке, ни здесь:
+        // он не выходит из системы, а уступает место (контракт каркаса, раздел «Роли»).
+        const leave = document.createElement("button");
+        leave.textContent = this.options.sharedPc ? "Передать компьютер" : "Это не я";
         leave.style.cssText = `
-            font: inherit; padding: 13px 22px; border-radius: 4px; text-decoration: none;
-            border: 1px solid rgba(255,255,255,.35); color: #fff;
+            font: inherit; padding: 13px 22px; border-radius: 6px; cursor: pointer;
+            border: 1px solid rgba(255,255,255,.35); background: none; color: #fff;
         `;
-        leave.onclick = (event) => {
-            event.preventDefault();
+        leave.onclick = () => {
             window.location.href = "/logout-form";
         };
 

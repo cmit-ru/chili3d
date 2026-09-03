@@ -40,24 +40,24 @@ import { GuestSave } from "./guestSave";
 import { type LessonCard, LessonPanel } from "./lessonPanel";
 import { Loading } from "./loading";
 import { ModelSpinner } from "./modelSpinner";
+import { type ВидСнимка, снимокОкна } from "./pageShot";
+import { returnWorkFromFiles } from "./returnWork";
 import { SandboxNotice } from "./sandboxNotice";
 import { ScreenLock } from "./screenLock";
-import { SourceNotice } from "./sourceNotice";
 import { ViewBanner } from "./viewBanner";
 import { cachedSceneVolumeMm3 } from "./volume";
 
 const loading = new Loading();
 document.body.appendChild(loading);
 
-// AGPL §13: предложение исходников должно быть на странице всегда, а не только
-// когда работа успешно открылась. Поэтому — сразу, до сборки приложения.
-new SourceNotice();
-
 // Номер работы читаем тем же способом, что и хранилище: после удаления
 // страницы-обёртки адрес работы — это путь `/3d/6`, а не `?project=6`.
 // Пока здесь смотрели только на параметр запроса, openProject молча выходил:
 // ребёнок видел домашний экран Chili3D, без имени, шагов урока и автосохранения.
 const projectId = projectIdFromLocation;
+
+/** Когда открыли работу: в отзыве видно, это первая минута или час возни. */
+const открытоВ = Date.now();
 
 interface ProjectMeta {
     title?: string;
@@ -81,6 +81,20 @@ let currentDoc: IDocument | undefined;
 /** Окна, которые каркас только открывает: заводит их `openProject`. */
 let feedbackWindow: Feedback | undefined;
 let guestWindow: GuestSave | undefined;
+
+/**
+ * Гость открыл файл работы (B-117): сохранять некуда, пока нет мастерской, —
+ * зовём тот же оверлей, что и «Сохранить работу». Окно своё, отдельное от
+ * песочницыного: у того сцена берётся с экрана, а здесь она из файла, и одно
+ * окно на двоих подсунуло бы файл тому, кто хотел сохранить собранное.
+ */
+let fileGuestWindow: GuestSave | undefined;
+let sceneFromFile: unknown;
+function askGuestToSaveFile(scene: unknown) {
+    sceneFromFile = scene;
+    fileGuestWindow ??= new GuestSave({ scene: () => sceneFromFile });
+    fileGuestWindow.open("register");
+}
 
 /** Все фигуры работы: «Скачать» берёт работу целиком, выделение не требуется. */
 function allVisualNodes(doc: IDocument): VisualNode[] {
@@ -270,12 +284,49 @@ async function openProject(
     spinner?: ModelSpinner,
 ) {
     const id = projectId();
+    let meta: ProjectMeta | null = earlyMeta;
+
+    // Отзыв заводим до всего остального — и до выхода в песочницу тоже. Он
+    // работает без учётной записи: это канал сообщений об ошибках, и ценнее
+    // всего он как раз у того, кто зашёл «просто посмотреть» и учётки не имеет.
+    // Оболочка гостей принимает (`POST /api/feedback`, учёт частоты по адресу).
+    // Какой снимок реально ушёл — важно при разборе: снимок всего окна иногда
+    // не получается, и тогда уходит прежний кадр рабочей области.
+    let видСнимка: ВидСнимка = "рабочая область";
+    // Окно открывает «Что-то не так?» в шапке — пункт меню человека, а у гостя
+    // кнопка рядом с «Войти». Своей плашки в углу у отзыва больше нет.
+    feedbackWindow = new Feedback({
+        projectId: id,
+        // Роль отправителя пишет оболочка по сессии — слову клиента тут веры нет.
+        context: () => ({
+            rev: id ? (storage?.currentRevision?.(id) ?? 0) : 0,
+            карточка: meta?.card?.title ?? "",
+            снимок: видСнимка,
+            // Обстоятельства, о которых иначе пришлось бы переспрашивать:
+            // давно ли человек тут сидит, не потерял ли он правки, есть ли
+            // сеть и чем он работает — пальцем или мышью.
+            наСтранице: Math.floor((Date.now() - открытоВ) / 60_000),
+            несохранённое: autoSave.hasPending(),
+            сеть: navigator.onLine ? "есть" : "нет",
+            устройство: window.matchMedia?.("(pointer: coarse)").matches ? "палец" : "мышь",
+        }),
+        shot: async () => {
+            // 700 px: рендерер отдаёт JPEG, как только кадр крупнее, — иначе
+            // полноразмерный PNG не пролез бы в ограничение отзыва.
+            const снимок = await снимокОкна({
+                запасной: () => app.activeView?.toImage(700) ?? null,
+            });
+            видСнимка = снимок.вид;
+            return снимок.картинка;
+        },
+    });
+
     if (!id) {
         if (sandboxFromLocation()) await openSandbox(app, spinner);
         return;
     }
 
-    const meta = earlyMeta ?? (await fetchMeta(id));
+    meta = earlyMeta ?? (await fetchMeta(id));
 
     // Работа могла быть ещё не начата (в облаке пусто) или сохранена другой
     // версией формата — тогда открывать нечего, начинаем с чистой сцены.
@@ -380,30 +431,15 @@ async function openProject(
         },
     );
 
-    // Отзыв прямо из мастерской (B-101): «Что-то не так?» в углу, рядом с
-    // «Открытым кодом». Гостю кнопку не показываем — отзыв привязан к учётке,
-    // иначе его нечем ограничить от потока и некому отвечать.
-    if (meta?.user) {
-        // Тот же отзыв открывает пункт «Что-то не так?» в меню человека.
-        feedbackWindow = new Feedback({
-            projectId: id,
-            // Роль отправителя пишет оболочка по сессии — слову клиента тут веры нет.
-            context: () => ({
-                rev: storage?.currentRevision?.(id) ?? 0,
-                карточка: meta?.card?.title ?? "",
-            }),
-            // 700 px: рендерер отдаёт JPEG, как только кадр крупнее, — иначе
-            // полноразмерный PNG не пролез бы в ограничение отзыва.
-            shot: () => app.activeView?.toImage(700) ?? null,
-        });
-    }
-
     if (meta?.user && meta.user.role === "student") {
         new ScreenLock({
             minutes: meta.lockMinutes ?? 30,
             // Автовыход к «Кто ты?» — только на общем компьютере класса (ТЗ §4);
             // дома замок информационный и никого не выкидывает.
             autoExitMinutes: meta.sharedPc ? (meta.lockMinutes ?? 10) : 0,
+            // От общего компьютера зависит не только автовыход, но и слово на
+            // кнопке: «Передать компьютер» или «Это не я» (контракт, раздел «Роли»).
+            sharedPc: meta.sharedPc,
             userName: meta.user.name,
             userAvatar: meta.user.avatar,
             hasUnsaved: () => autoSave.hasPending(),
@@ -425,6 +461,18 @@ async function handleApplicaionBuilt(app: IApplication, earlyMeta: ProjectMeta |
 
     const autoSave = new AutoSave(app);
     const frame = mountFrame(app, autoSave, earlyMeta);
+
+    // Файл работы (`.cd`) возвращается новой работой на сервере, а не вторым
+    // документом в браузере (B-117). Обработчик один на оба входа — окно выбора
+    // файла и перетаскивание, — потому что оба сходятся в `importFiles` ядра.
+    // Поле форковое, в апстримный `IApplication` его нет смысла тащить.
+    (app as { openWorkFiles?: (files: File[]) => void }).openWorkFiles = (files) =>
+        returnWorkFromFiles(files, {
+            flush: async () => {
+                if (currentDoc) await autoSave.saveNow(currentDoc);
+            },
+            askGuest: askGuestToSaveFile,
+        });
 
     // Мастерская уже собрана — показываем её, а ожидание модели переносим на
     // накладку со спиннером. Раньше экран загрузки держался до готовности сцены,
