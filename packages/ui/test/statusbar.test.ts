@@ -59,7 +59,14 @@ import type { I18nKeys } from "@chili3d/core";
 import { Statusbar } from "../src/statusbar/statusbar";
 import { mustQuery } from "./_helpers/domHelpers";
 
-const DEFAULT_TIP_ARGS = ["textContent", "prompt.default{0}{1}", "Middle", "Shift+Middle"];
+// Кнопки мыши называются словами через i18n (7503f0a5), а `translate` здесь подменён
+// тождеством — поэтому в подсказке ждём ключи, а не «Middle».
+const DEFAULT_TIP_ARGS = [
+    "textContent",
+    "prompt.default{0}{1}",
+    "navigation.middle",
+    "navigation.shiftMiddle",
+];
 
 describe("Statusbar", () => {
     beforeEach(() => {
