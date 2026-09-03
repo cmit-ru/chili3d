@@ -47,7 +47,7 @@ export default {
         "box.dz": "Высота",
         "circle.center": "Центр",
         "circle.radius": "Радиус",
-        "command.act.alignCamera": "Выровнять камеру",
+        "command.act.alignCamera": "Запомнить вид",
         "command.boolean.common": "Оставить общее",
         "command.boolean.cut": "Вырезать",
         "command.boolean.join": "Соединить",
