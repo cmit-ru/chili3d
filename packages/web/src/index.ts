@@ -174,6 +174,8 @@ function mountFrame(app: IApplication, autoSave: AutoSave, meta: ProjectMeta | n
         },
         feedback: () => feedbackWindow?.open(),
         guestSave: () => guestWindow?.open("register"),
+        // Хук ставится ниже, после сборки мастерской, — читаем его при нажатии.
+        openFiles: (files) => (app as { openWorkFiles?: (files: File[]) => void }).openWorkFiles?.(files),
         download: {
             workTitle: () => currentDoc?.name ?? meta?.title ?? "Работа",
             selectedCount: () => app.activeView?.document.selection.getSelectedNodeLength() ?? 0,

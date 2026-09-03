@@ -55,6 +55,8 @@ export interface FrameBarOptions {
     feedback?: () => void;
     /** Песочница и гость: «Сохранить работу» открывает оверлей регистрации. */
     guestSave?: () => void;
+    /** Возврат работы из файла: тот же обработчик, что у перетаскивания (B-133). */
+    openFiles?: (files: File[]) => void;
     download: DownloadDialogOptions;
 }
 
@@ -527,6 +529,7 @@ export class FrameBar {
                 openWorkPicker({
                     currentId: this.options.projectId,
                     flush: () => this.flush(),
+                    onFile: this.options.openFiles,
                     returnFocus: this.nameButton,
                 }),
         });

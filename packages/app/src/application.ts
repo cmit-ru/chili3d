@@ -170,7 +170,10 @@ export class Application extends Observable implements IApplication {
         const imports: File[] = [];
         for (const element of files) {
             const fileName = element.name.toLowerCase();
-            if (fileName.endsWith(DOCUMENT_FILE_EXTENSION)) {
+            // `.json` — файл работы мастерской схем (B-133). Форматом обмена он
+            // не является (`importFormats`), а уронить схему на 3D ребёнок может
+            // запросто: вид работы разберёт сервер и уведёт куда надо.
+            if (fileName.endsWith(DOCUMENT_FILE_EXTENSION) || fileName.endsWith(".json")) {
                 opens.push(element);
             } else {
                 // Расширения (.chiliplugin) форк не загружает: это исполнение

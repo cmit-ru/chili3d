@@ -524,6 +524,18 @@ describe("Application", () => {
             pubSpy.mockRestore();
         });
 
+        // B-133: файл работы мастерской схем — `.json`. Уронённый на 3D, он идёт
+        // тем же путём: вид работы разбирает сервер и уводит в нужную мастерскую.
+        test("openWorkFiles takes over .json work files of the circuits workshop", async () => {
+            const file = new File(['{"document_version":"circuits-1"}'], "schema.json");
+            const taken: File[][] = [];
+            sharedApp.openWorkFiles = (files) => taken.push(files);
+
+            await sharedApp.importFiles([file]);
+
+            expect(taken).toEqual([[file]]);
+        });
+
         // Соседняя команда «Добавить деталь» осталась прежней: обработчик
         // оболочки не должен перехватывать обычные файлы деталей.
         test("openWorkFiles is not called for ordinary part files", async () => {

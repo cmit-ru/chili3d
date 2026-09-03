@@ -1,7 +1,7 @@
 // Part of the Chili3d Project, under the AGPL-3.0 License.
 // See LICENSE file in the project root for full license information.
 //
-// Форк «Макетки»: возврат работы из файла `.cd` (B-117).
+// Форк «Макетки»: возврат работы из файла (B-117 — модели, B-133 — схемы).
 //
 // Ребёнок скачал работу файлом («Скачать…» → «Файл работы») и потом открыл этот
 // файл снова — окном выбора файла или перетаскиванием на мастерскую. Апстрим
@@ -17,7 +17,12 @@
 // Гостю в песочнице сохранять некуда, поэтому ему показывается тот же оверлей
 // «Сохранить работу», что и собранному в песочнице: заводим мастерскую (или
 // входим) — и файл уезжает в неё тем же движением.
+//
+// Вид работы определяет сервер по метке внутри файла, а не мастерская, на
+// которую файл уронили: ребёнок не помнит, схема у него в файле или модель.
+// Уронил схему на 3D — уедет в мастерскую схем по адресу из ответа.
 
+import { InternalClassName } from "@chili3d/core";
 import { showBanner } from "./errorBanner";
 
 /** Адрес маршрута оболочки. Один на оба входа — окно и перетаскивание. */
@@ -85,6 +90,7 @@ export async function returnWorkFromFile(file: File, options: ReturnWorkOptions 
 
     const answer = (await response.json().catch(() => null)) as {
         id?: number;
+        href?: string;
         message?: string;
     } | null;
     waiting.close();
@@ -92,6 +98,8 @@ export async function returnWorkFromFile(file: File, options: ReturnWorkOptions 
     // Сессии нет: у гостя ещё нет мастерской, класть работу некуда. Ведём его
     // тем же путём, что и «Сохранить работу» из песочницы, — регистрация или
     // вход поверх мастерской, и файл уезжает вместе с ними.
+    // Оверлей песочницы умеет заводить только модель, поэтому схему гостю
+    // предлагать нечем: про неё говорим общими словами.
     if (response.status === 401) {
         const scene = parseScene(text);
         if (scene !== undefined && options.askGuest) {
@@ -112,14 +120,20 @@ export async function returnWorkFromFile(file: File, options: ReturnWorkOptions 
     // останутся в этой вкладке.
     await options.flush?.();
     const go = options.go ?? ((href: string) => window.location.assign(href));
-    go(`/3d/${answer.id}`);
+    go(answer.href ?? `/3d/${answer.id}`);
 }
 
-/** Разбор для гостевого пути: сервер его не делал, а оверлею нужен объект. */
+/**
+ * Разбор для гостевого пути: сервер его не делал, а оверлею нужен объект.
+ * Схему возвращаем как «не наш вид» — оверлей заводит только модель.
+ */
 function parseScene(text: string): unknown {
+    let data: unknown;
     try {
-        return JSON.parse(text);
+        data = JSON.parse(text);
     } catch {
         return undefined;
     }
+    const doc = data as Record<string, unknown> | null;
+    return doc?.[InternalClassName] === "Document" ? data : undefined;
 }

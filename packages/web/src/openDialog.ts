@@ -31,6 +31,8 @@ export interface WorkPickerOptions {
     currentId: string | null;
     /** Досылка правок перед уходом; `false` — уходить нельзя. */
     flush: () => Promise<boolean>;
+    /** Возврат работы из файла на компьютере (B-133); вид определяет сервер. */
+    onFile?: (files: File[]) => void;
     returnFocus?: HTMLElement | null;
 }
 
@@ -75,6 +77,36 @@ export function openWorkPicker(options: WorkPickerOptions) {
     `;
 
     modal.card.append(status, search, list);
+
+    // Дверь к файлу работы. Стоит отдельно от списка и не перерисовывается
+    // вместе с ним: вернуть файл можно и тогда, когда список не загрузился, —
+    // серверу для этого список работ не нужен. Гостю окно и так не открывается.
+    if (options.onFile) {
+        const door = document.createElement("div");
+        door.style.cssText = "margin-top:10px;padding-top:10px;border-top:1px solid #c7d3ce";
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = "Открыть файл работы с компьютера…";
+        button.dataset["openFile"] = "";
+        button.style.cssText = `
+            font: inherit; font-size: 14px; padding: 4px 0; background: none; border: 0;
+            color: #0e7a5f; text-decoration: underline; cursor: pointer;
+        `;
+        const picker = document.createElement("input");
+        picker.type = "file";
+        picker.accept = ".cd,.json,application/json";
+        picker.hidden = true;
+        button.onclick = () => picker.click();
+        picker.onchange = () => {
+            const files = Array.from(picker.files ?? []);
+            picker.value = ""; // тот же файл должен выбираться второй раз
+            if (files.length === 0) return;
+            modal.close();
+            options.onFile?.(files);
+        };
+        door.append(button, picker);
+        modal.card.append(door);
+    }
 
     const closeButton = document.createElement("button");
     closeButton.type = "button";
