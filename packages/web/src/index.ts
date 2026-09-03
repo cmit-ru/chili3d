@@ -46,6 +46,7 @@ import { returnWorkFromFiles } from "./returnWork";
 import { SandboxNotice } from "./sandboxNotice";
 import { ScreenLock } from "./screenLock";
 import { sendEvent } from "./track";
+import { отметитьКоманду } from "./trail";
 import { ViewBanner } from "./viewBanner";
 import { cachedSceneVolumeMm3 } from "./volume";
 
@@ -76,10 +77,14 @@ interface ProjectMeta {
     viewingOthers?: boolean;
     isExample?: boolean;
     ownerName?: string;
+    /** Сколько ответов от нас автор ещё не прочитал (B-141). */
+    unreadReplies?: number;
 }
 
 /** Открытая работа: каркас собран раньше неё и спрашивает её через эту ссылку. */
 let currentDoc: IDocument | undefined;
+/** Непрочитанные ответы на обращения: их считает оболочка, мы только показываем (B-141). */
+let непрочитано = 0;
 /** Окна, которые каркас только открывает: заводит их `openProject`. */
 let feedbackWindow: Feedback | undefined;
 let guestWindow: GuestSave | undefined;
@@ -149,6 +154,7 @@ function mountFrame(app: IApplication, autoSave: AutoSave, meta: ProjectMeta | n
     const sandbox = !id && sandboxFromLocation();
     const storage = app.storage as unknown as CloudStorage;
     const viewing = Boolean(meta?.viewingOthers || meta?.isExample);
+    непрочитано = Number(meta?.unreadReplies) || 0;
 
     const frame = new FrameBar({
         projectId: id,
@@ -159,6 +165,8 @@ function mountFrame(app: IApplication, autoSave: AutoSave, meta: ProjectMeta | n
         isExample: Boolean(meta?.isExample),
         sandbox,
         sharedPc: Boolean(meta?.sharedPc),
+        // Точка «Вам ответили» на кнопке человека и на пункте «Что-то не так?» (B-141).
+        unread: непрочитано,
         saveNow: async () => {
             if (currentDoc) await autoSave.saveNow(currentDoc);
         },
@@ -339,6 +347,12 @@ async function openProject(
         },
         // Файлы — только взрослым (B-137 Ф2); роль — из ответа оболочки, сервер её перепроверит.
         attach: () => можноПрикладывать(meta?.user?.role),
+        // Точка зовёт, а прочитать ответ негде: окно показывает, куда идти (B-141).
+        unread: () => непрочитано > 0,
+        onRead: () => {
+            непрочитано = 0;
+            frame.setUnread(0);
+        },
     });
 
     if (!id) {
@@ -479,6 +493,11 @@ async function handleApplicaionBuilt(app: IApplication, earlyMeta: ProjectMeta |
     // Ошибки ядра — баннером с крестиком, а не тостом на три секунды: тост
     // уезжает раньше, чем ребёнок успевает прочитать, что не построилось.
     subscribeCoreErrors(PubSub.default);
+
+    // Лента последних действий для отзыва (B-134). Имена команд ядра — закрытый
+    // список, и `отметитьКоманду` пропускает только знакомые: ни имени работы, ни
+    // имени фигуры, ни имени файла в ленту не попадёт.
+    PubSub.default.sub("executeCommand", (name) => void отметитьКоманду(name));
 
     const autoSave = new AutoSave(app, () => sendEvent("ops_batch"));
     const frame = mountFrame(app, autoSave, earlyMeta);

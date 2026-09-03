@@ -11,9 +11,12 @@
 // не объясняет, почему его нет, а молча ничего не делающее — тем более.
 
 import { type BannerAction, FRAME_FONT, showBanner } from "./errorBanner";
+import { зажечьТочку } from "./feedback";
 
 export interface MenuItem {
     text: string;
+    /** Точка «Вам ответили» у пункта (B-141): по ней видно, зачем его открывать. */
+    dot?: boolean;
     /** Приглушён: виден, обходится с клавиатуры, при нажатии объясняет себя. */
     disabled?: boolean;
     reason?: string;
@@ -102,6 +105,7 @@ export function openMenu(button: HTMLElement, options: MenuOptions) {
         element.tabIndex = -1;
         element.textContent = item.text;
         element.style.cssText = ITEM;
+        if (item.dot) зажечьТочку(element);
         if (item.disabled) {
             element.setAttribute("aria-disabled", "true");
             element.style.color = "#4a625b";
