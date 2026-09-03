@@ -6,6 +6,7 @@ import { CheckProperty } from "./check";
 import { ColorProperty } from "./colorProperty";
 import { InputProperty } from "./input";
 import { MaterialProperty } from "./materialProperty";
+import { SelectProperty } from "./selectProperty";
 
 export function basicPropertyControl(document: IDocument, objs: any[], prop: Property) {
     if (prop === undefined || objs.length === 0) return "";
@@ -16,6 +17,10 @@ export function basicPropertyControl(document: IDocument, objs: any[], prop: Pro
 
     if (prop.type === "materialId" && canShowMaterialProperty(objs, prop)) {
         return new MaterialProperty(document, objs, prop);
+    }
+
+    if (prop.combobox) {
+        return new SelectProperty(document, objs, prop);
     }
 
     const value = objs[0][prop.name];

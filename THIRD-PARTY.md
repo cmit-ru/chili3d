@@ -27,7 +27,7 @@
 
 <!-- ПЕРЕЧЕНЬ-НАЧАЛО: раздел считается скриптом scripts/third-party.mjs, руками не править -->
 
-Всего компонентов: 23. Пересчитывается командой `npm run third-party`.
+Всего компонентов: 29. Пересчитывается командой `npm run third-party`.
 
 ### Компоненты вне npm
 
@@ -38,6 +38,11 @@
 | Emscripten | по инструкции cpp/README.md | Emscripten authors и участники проекта | MIT / University of Illinois NCSA (двойная) | Компиляция ядра в WebAssembly (в поставку не входит) | https://github.com/emscripten-core/emscripten/blob/main/LICENSE |
 | nginx | stable | Nginx, Inc. и участники проекта | BSD-2-Clause | Отдача статики редактора (образ deploy/Dockerfile) | https://nginx.org/LICENSE |
 | Node.js | 22 | OpenJS Foundation | MIT (плюс лицензии компонентов рантайма) | Среда сборки (в поставку не входит) | https://github.com/nodejs/node/blob/main/LICENSE |
+| Шрифт PT Sans | 2.003W | ParaType Ltd. (2010) | SIL Open Font License 1.1 (с закреплёнными именами «PT Sans», «ParaType») | Контуры букв для инструмента «Надпись»; файл PT_Sans-Web-Regular.ttf и текст лицензии лежат в packages/app/src/text/fonts, файл шрифта не изменялся | https://fonts.google.com/specimen/PT+Sans |
+| Шрифт PT Serif | 1.000W | ParaType Ltd. (2010) | SIL Open Font License 1.1 (с закреплёнными именами «PT Sans», «PT Serif», «ParaType») | Контуры букв для инструмента «Надпись»; файл PT_Serif-Web-Regular.ttf и текст лицензии лежат в packages/app/src/text/fonts, файл шрифта не изменялся | https://fonts.google.com/specimen/PT+Serif |
+| Шрифт PT Mono | 1.001W | ParaType Ltd. (2011) | SIL Open Font License 1.1 (с закреплёнными именами «PT Sans», «PT Serif», «PT Mono», «ParaType») | Контуры букв для инструмента «Надпись»; файл PTM55FT.ttf и текст лицензии лежат в packages/app/src/text/fonts, файл шрифта не изменялся | https://fonts.google.com/specimen/PT+Mono |
+| Шрифт Bad Script | 2.000 | The Bad Script Project Authors (2011) | SIL Open Font License 1.1 (без закреплённых имён) | Контуры букв для инструмента «Надпись»; файл BadScript-Regular.ttf и текст лицензии лежат в packages/app/src/text/fonts, файл шрифта не изменялся | https://fonts.google.com/specimen/Bad+Script |
+| Шрифт Ruslan Display | 1.001 | Oleg Snarsky, Denis Masharov, Vladimir Rabdu (2011) | SIL Open Font License 1.1 (с закреплёнными именами «Ruslan», «Ruslan Display») | Контуры букв для инструмента «Надпись»; файл RuslanDisplay-Regular.ttf и текст лицензии лежат в packages/app/src/text/fonts, файл шрифта не изменялся | https://fonts.google.com/specimen/Ruslan+Display |
 
 ### Пакеты npm
 
@@ -45,6 +50,7 @@
 |---|---|---|---|---|---|
 | @types/jszip | 3.4.0 | Microsoft Corporation | MIT | В браузере (бандл редактора) | https://github.com/Stuk/jszip |
 | jszip | 3.10.1 | Stuart Knightley | (MIT OR GPL-3.0-or-later) | В браузере (бандл редактора) | https://github.com/Stuk/jszip |
+| opentype.js | 2.0.0 | Frederik De Bleser | MIT | В браузере (бандл редактора) | https://github.com/opentypejs/opentype.js |
 | @biomejs/biome | 2.4.15 | Emanuele Stoppa | MIT OR Apache-2.0 | Инструмент сборки (в поставку не входит) | https://github.com/biomejs/biome |
 | @rspack/cli | 2.0.3 | -present Bytedance, Inc. and its affiliates | MIT | Инструмент сборки (в поставку не входит) | https://github.com/web-infra-dev/rspack |
 | @rspack/core | 2.0.3 | -present Bytedance, Inc. and its affiliates | MIT | Инструмент сборки (в поставку не входит) | https://github.com/web-infra-dev/rspack |

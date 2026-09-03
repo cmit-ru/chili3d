@@ -38,5 +38,45 @@
         "лицензия": "MIT (плюс лицензии компонентов рантайма)",
         "роль": "Среда сборки (в поставку не входит)",
         "ссылка": "https://github.com/nodejs/node/blob/main/LICENSE"
+    },
+    {
+        "имя": "Шрифт PT Sans",
+        "версия": "2.003W",
+        "правообладатель": "ParaType Ltd. (2010)",
+        "лицензия": "SIL Open Font License 1.1 (с закреплёнными именами «PT Sans», «ParaType»)",
+        "роль": "Контуры букв для инструмента «Надпись»; файл PT_Sans-Web-Regular.ttf и текст лицензии лежат в packages/app/src/text/fonts, файл шрифта не изменялся",
+        "ссылка": "https://fonts.google.com/specimen/PT+Sans"
+    },
+    {
+        "имя": "Шрифт PT Serif",
+        "версия": "1.000W",
+        "правообладатель": "ParaType Ltd. (2010)",
+        "лицензия": "SIL Open Font License 1.1 (с закреплёнными именами «PT Sans», «PT Serif», «ParaType»)",
+        "роль": "Контуры букв для инструмента «Надпись»; файл PT_Serif-Web-Regular.ttf и текст лицензии лежат в packages/app/src/text/fonts, файл шрифта не изменялся",
+        "ссылка": "https://fonts.google.com/specimen/PT+Serif"
+    },
+    {
+        "имя": "Шрифт PT Mono",
+        "версия": "1.001W",
+        "правообладатель": "ParaType Ltd. (2011)",
+        "лицензия": "SIL Open Font License 1.1 (с закреплёнными именами «PT Sans», «PT Serif», «PT Mono», «ParaType»)",
+        "роль": "Контуры букв для инструмента «Надпись»; файл PTM55FT.ttf и текст лицензии лежат в packages/app/src/text/fonts, файл шрифта не изменялся",
+        "ссылка": "https://fonts.google.com/specimen/PT+Mono"
+    },
+    {
+        "имя": "Шрифт Bad Script",
+        "версия": "2.000",
+        "правообладатель": "The Bad Script Project Authors (2011)",
+        "лицензия": "SIL Open Font License 1.1 (без закреплённых имён)",
+        "роль": "Контуры букв для инструмента «Надпись»; файл BadScript-Regular.ttf и текст лицензии лежат в packages/app/src/text/fonts, файл шрифта не изменялся",
+        "ссылка": "https://fonts.google.com/specimen/Bad+Script"
+    },
+    {
+        "имя": "Шрифт Ruslan Display",
+        "версия": "1.001",
+        "правообладатель": "Oleg Snarsky, Denis Masharov, Vladimir Rabdu (2011)",
+        "лицензия": "SIL Open Font License 1.1 (с закреплёнными именами «Ruslan», «Ruslan Display»)",
+        "роль": "Контуры букв для инструмента «Надпись»; файл RuslanDisplay-Regular.ttf и текст лицензии лежат в packages/app/src/text/fonts, файл шрифта не изменялся",
+        "ссылка": "https://fonts.google.com/specimen/Ruslan+Display"
     }
 ]

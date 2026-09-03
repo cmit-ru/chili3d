@@ -19,3 +19,4 @@ export * from "./regularPolygon";
 export * from "./revolve";
 export * from "./sphere";
 export * from "./sweep";
+export * from "./text";

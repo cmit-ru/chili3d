@@ -26,7 +26,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const dist = path.join(here, "..", "dist");
 
 /** Что сжимать gzip'ом: всё текстовое, что реально отдаётся браузеру. */
-const СЖИМАЕМЫЕ = new Set([".js", ".css", ".html", ".svg", ".json", ".txt", ".wasm"]);
+const СЖИМАЕМЫЕ = new Set([".js", ".css", ".html", ".svg", ".json", ".txt", ".wasm", ".ttf"]);
 
 /** Мелочь сжимать бессмысленно: заголовки съедят выигрыш. */
 const МИНИМУМ = 1024;

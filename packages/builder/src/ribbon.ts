@@ -37,6 +37,8 @@ export const DefaultRibbon: RibbonTabProfile[] = [
                         ],
                     },
                     "create.extrude",
+                    // Наверху только надпись на теле — ею подписывают брелок.
+                    "create.textOnBody",
                 ],
                 // Дуги, кривые и протяжки нужны позже — ребёнку первых уроков они
                 // только увеличивают стену кнопок.
@@ -53,6 +55,8 @@ export const DefaultRibbon: RibbonTabProfile[] = [
                     "create.bezier",
                     "create.helix",
                     "create.pipe",
+                    // Надпись сама по себе, без тела, нужна реже.
+                    "create.text",
                 ],
             },
             {
