@@ -65,7 +65,14 @@ if (${EMSCRIPTEN})
     target_include_directories (occt PUBLIC ${OcctIncludeDirs})
     target_compile_options (occt PUBLIC
         $<$<CONFIG:Release>:-Oz>
-        $<$<CONFIG:Release>:-flto>
+        # ThinLTO, а не полная LTO. Полная сливает все 6300 объектов OCCT в один
+        # модуль, и `wasm-ld` просит на линковке ≥3,6 ГБ — сборочная машина с
+        # потолком 6 ГБ этого не выдерживает (три линковки подряд убил OOM,
+        # `--lto-O1` не помог: доминирует сам слитый модуль). ThinLTO оптимизирует
+        # помодульно по сводному индексу: пик линковщика ~0,9 ГБ. Плата — wasm
+        # больше примерно на 4 % (17,4 → 18,1 МБ). Подробности — в «Макетке»,
+        # agent_docs/guides/operations.md.
+        $<$<CONFIG:Release>:-flto=thin>
         -sDISABLE_EXCEPTION_CATCHING=0
         -DOCCT_NO_PLUGINS
     )
@@ -74,13 +81,13 @@ if (${EMSCRIPTEN})
     target_include_directories (${TARGET} PUBLIC ${OcctIncludeDirs})
     target_compile_options (${TARGET} PUBLIC
         $<$<CONFIG:Release>:-Oz>
-        $<$<CONFIG:Release>:-flto>
+        $<$<CONFIG:Release>:-flto=thin>
         -sDISABLE_EXCEPTION_CATCHING=0
     )
     target_link_libraries(${TARGET} PUBLIC occt)
     target_link_options (${TARGET} PUBLIC
         $<IF:$<CONFIG:Release>,-Oz,-O0>
-        $<IF:$<CONFIG:Release>,-flto,-fno-lto>
+        $<IF:$<CONFIG:Release>,-flto=thin,-fno-lto>
         -sDISABLE_EXCEPTION_CATCHING=0
         # Форк «Макетки»: без eval и new Function в склейке emscripten.
         # Это позволяет включить строгую политику безопасности содержимого без

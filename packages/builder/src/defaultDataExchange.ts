@@ -11,6 +11,7 @@ import {
     PubSub,
     Result,
     ShapeNode,
+    type StepExportPart,
     type VisualNode,
 } from "@chili3d/core";
 
@@ -97,13 +98,14 @@ export class DefaultDataExchange implements IDataExchange {
         } else if (type === ".obj") {
             shapeResult = document.visual.meshExporter.exportToObj(nodes);
         } else {
-            const shapes = this.getExportShapes(nodes);
-            if (!shapes.length) return undefined;
+            const parts = this.getExportParts(nodes);
+            if (!parts.length) return undefined;
+            const shapes = parts.map((part) => part.shape);
             // STL goes through the headless OCCT-mesh converter (not the Three.js
             // visual exporter), so the same path works in the browser and the MCP server.
             if (type === ".stl") shapeResult = this.exportStl(document, shapes, false);
             if (type === ".stl binary") shapeResult = this.exportStl(document, shapes, true);
-            if (type === ".step") shapeResult = this.exportStep(document, shapes);
+            if (type === ".step") shapeResult = this.exportStep(document, parts);
             if (type === ".iges") shapeResult = this.exportIges(document, shapes);
             if (type === ".brep") shapeResult = this.exportBrep(document, shapes);
         }
@@ -114,21 +116,35 @@ export class DefaultDataExchange implements IDataExchange {
         return undefined;
     }
 
-    private getExportShapes(nodes: VisualNode[]): IShape[] {
-        const shapes = nodes
+    private getExportParts(nodes: VisualNode[]): StepExportPart[] {
+        const parts = nodes
             .filter((x): x is ShapeNode => x instanceof ShapeNode)
-            .map((x) => x.shape.value.transformedMul(x.worldTransform()));
+            .map((x) => ({
+                shape: x.shape.value.transformedMul(x.worldTransform()),
+                name: x.name,
+                color: this.nodeColor(x),
+            }));
 
-        !shapes.length && PubSub.default.pub("showToast", "error.export.noNodeCanBeExported");
-        return shapes;
+        !parts.length && PubSub.default.pub("showToast", "error.export.noNodeCanBeExported");
+        return parts;
+    }
+
+    /** The color the body has in the workshop — STEP carries it as a style. */
+    private nodeColor(node: ShapeNode): string | undefined {
+        const id = Array.isArray(node.materialId) ? node.materialId[0] : node.materialId;
+        const material = id ? node.document.modelManager.materials.find((x) => x.id === id) : undefined;
+        if (!material) return undefined;
+        return typeof material.color === "number"
+            ? `#${material.color.toString(16).padStart(6, "0")}`
+            : material.color;
     }
 
     private exportStl(doc: IDocument, shapes: IShape[], binary: boolean): Result<BlobPart> {
         return shapeConverter.convertToSTL(shapes, { binary }) as Result<BlobPart>;
     }
 
-    private exportStep(doc: IDocument, shapes: IShape[]) {
-        return shapeConverter.convertToSTEP(...shapes);
+    private exportStep(doc: IDocument, parts: StepExportPart[]) {
+        return shapeConverter.convertToSTEP(parts);
     }
 
     private exportIges(doc: IDocument, shapes: IShape[]) {
