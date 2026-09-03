@@ -62,6 +62,52 @@ describe("Зона «человек» в полосе", () => {
         expect(кнопка("Что-то не так?")).toBeUndefined();
         expect(кнопка("Войти")).toBeDefined();
     });
+
+    // B-141: ответ на обращение приходит в кабинет, а ребёнок из мастерской не
+    // выходит. Точка на кнопке человека — единственное место, где он про ответ
+    // узнает; «Что-то не так?» лежит в закрытом меню и одна там не видна.
+    const точки = () => document.querySelectorAll("#frame-user [data-fb-dot]").length;
+    const ученик = (over: Partial<FrameBarOptions> = {}) =>
+        опции({
+            projectId: "7",
+            sandbox: false,
+            user: { name: "Аня", avatar: "🙂", role: "student" },
+            feedback: () => {},
+            ...over,
+        });
+
+    test("ответов нет — точки нет", () => {
+        new FrameBar(ученик());
+        expect(точки()).toBe(0);
+        (document.querySelector("[data-frame-user]") as HTMLElement).click();
+        expect(document.querySelectorAll("[data-frame-menu] [data-fb-dot]")).toHaveLength(0);
+    });
+
+    test("у гостя точки не бывает: обращений у него нет", () => {
+        new FrameBar(опции({ feedback: () => {}, unread: 3 }));
+        expect(точки()).toBe(0);
+    });
+
+    test("есть непрочитанный ответ — точка на кнопке человека и на пункте меню", () => {
+        new FrameBar(ученик({ unread: 2 }));
+        const человек = document.querySelector("[data-frame-user]") as HTMLElement;
+        expect(точки()).toBe(1);
+        expect(человек.title).toBe("Вам ответили");
+
+        человек.click();
+        const пункт = [...document.querySelectorAll("[data-frame-menu] [role='menuitem']")].find((el) =>
+            el.textContent?.startsWith("Что-то не так?"),
+        ) as HTMLElement;
+        expect(пункт.querySelector("[data-fb-dot]")).not.toBeNull();
+    });
+
+    test("ответ прочитан — точка гаснет и подсказка возвращается", () => {
+        const frame = new FrameBar(ученик({ unread: 1 }));
+        const человек = document.querySelector("[data-frame-user]") as HTMLElement;
+        frame.setUnread(0);
+        expect(точки()).toBe(0);
+        expect(человек.title).toBe("");
+    });
 });
 
 // Меню работы открывает отдельная дверь «Файл ▾» сразу за именем, а щелчок по

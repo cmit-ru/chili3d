@@ -19,6 +19,8 @@
 
 import { FRAME_FONT } from "./errorBanner";
 import { НЕ_СНИМАТЬ } from "./pageShot";
+import { загрузкаМс, кадрМс } from "./speed";
+import { лентаДействий } from "./trail";
 
 const ВИДЫ: [string, string][] = [
     ["broken", "Что-то сломалось"],
@@ -142,6 +144,42 @@ const PRIMARY = `
     border: none; background: #1c6dbd; color: #fff; cursor: pointer;
 `;
 
+export const ОТВЕТИЛИ = "Вам ответили";
+
+const ТОЧКА = `
+    display: inline-block; width: 7px; height: 7px; margin-left: 6px;
+    border-radius: 50%; background: #a4262c; vertical-align: middle;
+`;
+
+/**
+ * Точка «Вам ответили» (B-141). «Что-то не так?» у вошедшего лежит в меню человека,
+ * а меню закрыто — точка на одном пункте никому бы не показалась. Поэтому её ставят
+ * и на кнопку человека, которая в полосе видна всегда: ребёнок из мастерской не
+ * выходит и значка в шапке кабинета не увидит.
+ *
+ * Возвращает, как её погасить: человек пошёл читать ответ — точке больше нечего звать.
+ */
+export function зажечьТочку(...места: (HTMLElement | null | undefined)[]): () => void {
+    const было = new Map<HTMLElement, string>();
+    const точки: HTMLElement[] = [];
+    for (const где of места) {
+        if (!где) continue;
+        было.set(где, где.title);
+        где.title = ОТВЕТИЛИ;
+        const точка = document.createElement("span");
+        точка.dataset["fbDot"] = "";
+        // Слово уже сказано подсказкой кнопки — читалке экрана точка ничего не добавит.
+        точка.setAttribute("aria-hidden", "true");
+        точка.style.cssText = ТОЧКА;
+        где.append(точка);
+        точки.push(точка);
+    }
+    return () => {
+        for (const точка of точки) точка.remove();
+        for (const [где, title] of было) где.title = title;
+    };
+}
+
 export interface FeedbackOptions {
     /** Номер работы; в песочнице и на пустом входе его нет. */
     projectId: string | null;
@@ -152,6 +190,10 @@ export interface FeedbackOptions {
     shot?: () => Promise<string | null>;
     /** Можно ли приложить файлы: только взрослым (ТЗ обращений §7). Без него поля нет. */
     attach?: () => boolean;
+    /** Есть ли непрочитанный ответ от нас: тогда окно говорит, где его прочитать (B-141). */
+    unread?: () => boolean;
+    /** Человек пошёл читать ответ — точке больше нечего звать. */
+    onRead?: () => void;
 }
 
 export class Feedback {
@@ -204,6 +246,34 @@ export class Feedback {
         lede.textContent =
             "Расскажите, что случилось. Номер работы, браузер и картинку экрана мы приложим " +
             "сами — переспрашивать не будем.";
+
+        // Точка позвала — окно должно сказать, куда идти за ответом. Переписки в
+        // мастерской нет (она в кабинете, «Мои письма»), поэтому ссылка открывает
+        // соседнюю вкладку: уводить ребёнка со страницы с его работой мы не хотим.
+        let ответ: HTMLElement | null = null;
+        if (this.options.unread?.()) {
+            ответ = document.createElement("div");
+            ответ.style.cssText = "line-height:1.4";
+            ответ.append(`${ОТВЕТИЛИ}. `);
+            const ссылка = document.createElement("a");
+            ссылка.href = "/account/feedback";
+            ссылка.target = "_blank";
+            ссылка.rel = "noopener";
+            ссылка.textContent = "Прочитать ответ";
+            ссылка.setAttribute("data-fb-answer", "");
+            ссылка.onclick = () => this.options.onRead?.();
+            ответ.append(ссылка);
+        }
+
+        // Кадр меряем сразу и один раз: короткой серией, пока человек пишет текст.
+        // Отправку замер не задерживает — не успел, значит числа в письме не будет:
+        // ждать полсекунды ради строки «Кадр рисуется» человеку незачем.
+        let кадр: number | null = null;
+        void кадрМс()
+            .then((мс) => {
+                кадр = мс;
+            })
+            .catch(() => {});
 
         let вид = "broken";
         const tabs = document.createElement("div");
@@ -292,7 +362,9 @@ export class Feedback {
         note.hidden = true;
         note.style.cssText = "line-height:1.4";
 
-        card.append(title, lede, tabs, label, check, место, превью);
+        card.append(title, lede);
+        if (ответ) card.append(ответ);
+        card.append(tabs, label, check, место, превью);
         if (полеФайлов) card.append(полеФайлов);
         card.append(send, note);
         document.body.appendChild(root);
@@ -351,6 +423,10 @@ export class Feedback {
                             браузер: navigator.userAgent,
                             экран: `${window.innerWidth}×${window.innerHeight}`,
                             версия: await this.ensureVersion(),
+                            загрузка: загрузкаМс(),
+                            кадр,
+                            // Лента — коды действий; по-русски их называет оболочка.
+                            действия: лентаДействий(),
                             ошибки: последниеОшибки(),
                         },
                     }),

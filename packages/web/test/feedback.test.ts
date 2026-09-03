@@ -8,6 +8,7 @@
 // открывается вызовом `open()`, а не нажатием на кнопку в углу.
 
 import { Feedback } from "../src/feedback";
+import { забытьДействия, отметить, отметитьКоманду } from "../src/trail";
 
 interface Отправленное {
     editor: string;
@@ -15,7 +16,15 @@ interface Отправленное {
     message: string;
     projectId: number | null;
     shot: string | null;
-    context: { rev: number; карточка: string; версия: string; ошибки: string[] };
+    context: {
+        rev: number;
+        карточка: string;
+        версия: string;
+        ошибки: string[];
+        загрузка: number | null;
+        кадр: number | null;
+        действия: string[];
+    };
 }
 
 const запросы: { url: string; body: Отправленное }[] = [];
@@ -64,6 +73,7 @@ describe("Отзыв из мастерской", () => {
 
     afterEach(() => {
         document.body.innerHTML = "";
+        забытьДействия();
     });
 
     const открыть = (attach?: () => boolean) => {
@@ -237,5 +247,59 @@ describe("Отзыв из мастерской", () => {
         expect(card.hasAttribute("data-fb-file-failed")).toBe(true);
         expect(card.textContent).toContain("больше 5 МБ");
         expect(card.textContent).toContain("Мои обращения");
+    });
+
+    // B-134: жалобу «тормозит» без чисел разобрать нельзя, а «что было перед этим»
+    // экономит переписку. Лента — коды действий, а не то, над чем человек работал.
+    test("в письме есть числа о скорости и лента действий кодами", async () => {
+        отметитьКоманду("create.box");
+        отметитьКоманду("edit.undo");
+        открыть();
+        (document.querySelector("[data-fb-send]") as HTMLButtonElement).click();
+        await провернуть();
+
+        const { context } = запросы[0].body;
+        expect(context.действия).toEqual(["shape_add", "undo"]);
+        // Замер кадра отправку не держит: не успел — числа нет, письмо ушло.
+        expect(context).toHaveProperty("кадр");
+        expect(context).toHaveProperty("загрузка");
+    });
+
+    test("имя, набранное человеком, в ленту не попадает", async () => {
+        отметить("поставил деталь «Домик Пети»");
+        отметитьКоманду("create.box");
+        открыть();
+        (document.querySelector("[data-fb-send]") as HTMLButtonElement).click();
+        await провернуть();
+
+        expect(запросы[0].body.context.действия).toEqual(["shape_add"]);
+        expect(JSON.stringify(запросы[0].body)).not.toContain("Домик Пети");
+    });
+
+    // B-141: точка на кнопке зовёт, а прочитать ответ негде — переписка живёт в
+    // кабинете. Окно показывает дверь туда и гасит точку, когда в неё вошли.
+    test("непрочитанный ответ — окно говорит, где его прочитать", () => {
+        let прочитано = false;
+        new Feedback({
+            projectId: "42",
+            unread: () => true,
+            onRead: () => (прочитано = true),
+        }).open();
+
+        const ссылка = document.querySelector("[data-fb-answer]") as HTMLAnchorElement;
+        expect(ссылка).not.toBeNull();
+        expect(ссылка.getAttribute("href")).toBe("/account/feedback");
+        expect(ссылка.target).toBe("_blank");
+        ссылка.click();
+        expect(прочитано).toBe(true);
+    });
+
+    test("ответов нет — про них в окне ни слова", () => {
+        new Feedback({ projectId: "42", unread: () => false }).open();
+        expect(document.querySelector("[data-fb-answer]")).toBeNull();
+        document.body.innerHTML = "";
+
+        new Feedback({ projectId: "42" }).open();
+        expect(document.querySelector("[data-fb-answer]")).toBeNull();
     });
 });

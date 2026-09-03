@@ -15,6 +15,7 @@
 import type { ConflictInfo, SaveState } from "@chili3d/storage";
 import { type DownloadDialogOptions, openDownloadDialog, saveWorkFile } from "./downloadDialog";
 import { FRAME_FONT, showBanner, showNotice, showRememberedNotice } from "./errorBanner";
+import { зажечьТочку } from "./feedback";
 import { openWorkPicker } from "./openDialog";
 import { type MenuItem, openMenu } from "./workMenu";
 
@@ -53,6 +54,8 @@ export interface FrameBarOptions {
     applyTitle?: (title: string) => void;
     /** «Что-то не так?» — то же окно, что у кнопки в углу. */
     feedback?: () => void;
+    /** Сколько ответов от нас автор ещё не прочитал: по этому числу зажигается точка (B-141). */
+    unread?: number;
     /** Песочница и гость: «Сохранить работу» открывает оверлей регистрации. */
     guestSave?: () => void;
     /** Возврат работы из файла: тот же обработчик, что у перетаскивания (B-133). */
@@ -211,6 +214,9 @@ export class FrameBar {
     private fadeTimer?: number;
     private hintTimer?: number;
     private renaming = false;
+    private userButton?: HTMLButtonElement;
+    private непрочитано = 0;
+    private погасить?: () => void;
 
     constructor(private readonly options: FrameBarOptions) {
         ensureFrameStyles();
@@ -286,6 +292,8 @@ export class FrameBar {
             if (options.user) this.renderUser(people, options.user);
             else people.append(...this.guestButtons());
         }
+        // У гостя обращений нет — звать его нечем, и точка не зажжётся.
+        this.setUnread(options.unread ?? 0);
 
         this.updateName();
         this.applyState();
@@ -644,6 +652,18 @@ export class FrameBar {
 
     /* ---------- зона «человек» ---------- */
 
+    /**
+     * Сколько ответов от нас автор ещё не прочитал (B-141). Больше нуля — на кнопке
+     * человека загорается точка «Вам ответили» и такая же встаёт у пункта «Что-то
+     * не так?»; ноль её гасит: человек ушёл читать ответ, звать больше нечем.
+     */
+    setUnread(count: number) {
+        this.погасить?.();
+        this.погасить = undefined;
+        this.непрочитано = count > 0 ? count : 0;
+        if (this.непрочитано > 0 && this.userButton) this.погасить = зажечьТочку(this.userButton);
+    }
+
     /** Гость: вместо аватара одна дверь — «Войти» (`frame-contract.md`, «Роли»).
      *  Рядом с ней — отзыв: у гостя нет меню человека, а сообщить об ошибке он
      *  должен мочь ровно так же, как ученик. Обе кнопки тихие и одинаковые. */
@@ -793,7 +813,13 @@ export class FrameBar {
                 items: [
                     { text: homeText, onSelect: () => void this.leave(home) },
                     ...(this.options.feedback
-                        ? [{ text: "Что-то не так?", onSelect: () => this.options.feedback?.() }]
+                        ? [
+                              {
+                                  text: "Что-то не так?",
+                                  dot: this.непрочитано > 0,
+                                  onSelect: () => this.options.feedback?.(),
+                              },
+                          ]
                         : []),
                     {
                         text: leaveText,
@@ -803,6 +829,7 @@ export class FrameBar {
                 ],
             });
 
+        this.userButton = button;
         host.append(button);
     }
 }
