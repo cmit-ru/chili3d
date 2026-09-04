@@ -73,7 +73,14 @@ if (${EMSCRIPTEN})
         # больше примерно на 4 % (17,4 → 18,1 МБ). Подробности — в «Макетке»,
         # agent_docs/guides/operations.md.
         $<$<CONFIG:Release>:-flto=thin>
-        -sDISABLE_EXCEPTION_CATCHING=0
+        # Нативные исключения WebAssembly вместо эмуляции на JavaScript. Эмуляция
+        # (`-sDISABLE_EXCEPTION_CATCHING=0`) вставляла обёртку в каждый вызов и
+        # стоила около 783 КБ brotli и ~1 с загрузки. `WASM_LEGACY_EXCEPTIONS=1` —
+        # набор инструкций, который понимают Chromium 95+ и Firefox 100+; он и так
+        # умолчание emscripten 5.0.7, но прибит явно: смена умолчания при обновлении
+        # emsdk молча подняла бы минимальную версию браузера (ТЗ §9 «Платформы»).
+        -fwasm-exceptions
+        -sWASM_LEGACY_EXCEPTIONS=1
         -DOCCT_NO_PLUGINS
     )
 
@@ -82,13 +89,15 @@ if (${EMSCRIPTEN})
     target_compile_options (${TARGET} PUBLIC
         $<$<CONFIG:Release>:-Oz>
         $<$<CONFIG:Release>:-flto=thin>
-        -sDISABLE_EXCEPTION_CATCHING=0
+        -fwasm-exceptions
+        -sWASM_LEGACY_EXCEPTIONS=1
     )
     target_link_libraries(${TARGET} PUBLIC occt)
     target_link_options (${TARGET} PUBLIC
         $<IF:$<CONFIG:Release>,-Oz,-O0>
         $<IF:$<CONFIG:Release>,-flto=thin,-fno-lto>
-        -sDISABLE_EXCEPTION_CATCHING=0
+        -fwasm-exceptions
+        -sWASM_LEGACY_EXCEPTIONS=1
         # Форк «Макетки»: без eval и new Function в склейке emscripten.
         # Это позволяет включить строгую политику безопасности содержимого без
         # unsafe-eval — требование фазы подготовки к реестру (ТЗ §9, 1.1r) и
