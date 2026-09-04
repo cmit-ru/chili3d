@@ -12,7 +12,7 @@ import path from "node:path";
 import { GeometryUtils, type IFace, type ISolid, Plane, XYZ } from "@chili3d/core";
 import { initWasm, ShapeFactory } from "@chili3d/wasm";
 import { beforeAll, describe, expect, test } from "@rstest/core";
-import { верхняяГрань, высотаВверх } from "../src/aiOps";
+import { верхняяГрань, высотаВверх, пределСтенки } from "../src/aiOps";
 
 let фабрика: ShapeFactory;
 
@@ -100,5 +100,20 @@ describe("полость на ядре OCCT", () => {
         expect(рамка.max.z).toBeCloseTo(40, 5);
         // Нутро 34×34×37: по 3 мм стенок с четырёх сторон и снизу, сверху дырка.
         expect((полость.value as ISolid).volume()).toBeCloseTo(40 ** 3 - 34 * 34 * 37, 3);
+    });
+
+    test("стенка толще места внутри: ядро молчит и возвращает тело, предел считаем сами", () => {
+        const малый = фабрика.box(Plane.XY, 10, 10, 10);
+        if (!малый.isOk) throw new Error(String(малый.error));
+
+        // Ядро на такой толщине не отказывает — отдаёт исходный брусок целиком,
+        // и без нашей проверки ребёнок не узнал бы, что просьбу не выполнили (B-193).
+        const ядро = фабрика.makeThickSolidByJoin(малый.value, [верхняяГрань(малый.value)], -50, "arc");
+        expect(ядро.isOk).toBe(true);
+        expect((ядро.value as ISolid).volume()).toBeGreaterThan(999);
+
+        // Дно одно, стенок по ширине и глубине по две: у бруска 10 предел — 5 мм.
+        expect(пределСтенки(малый.value)).toBeCloseTo(5, 5);
+        expect(пределСтенки(брусок())).toBeCloseTo(20, 5);
     });
 });
