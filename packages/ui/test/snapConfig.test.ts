@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, test } from "@rstest/core";
 // Mock CSS modules
 rs.mock("../src/statusbar/snapConfig.module.css", () => ({
     container: "sc-container",
+    caption: "sc-caption",
 }));
 
 // Mock element helpers — snap tests trigger handlers via el.click(),
@@ -68,6 +69,21 @@ describe("SnapConfig", () => {
             const labels = config.querySelectorAll("label");
             // 8 snap type labels + 1 tracking label = 9
             expect(labels.length).toBe(9);
+        });
+    });
+
+    describe("group captions", () => {
+        // Подписи приходят через `Localize`, а мок элементов объектный textContent
+        // не раскрывает — поэтому проверяется расстановка, а не сам текст.
+        test("should render a caption before each snap group", () => {
+            const config = new SnapConfig();
+            const children = [...config.children];
+            const captions = config.querySelectorAll(".sc-caption");
+
+            expect(captions.length).toBe(2);
+            // «Прилипать к:» открывает плашку, «ещё:» стоит после первых четырёх галочек
+            expect(children.indexOf(captions[0])).toBe(0);
+            expect(children.indexOf(captions[1])).toBe(5);
         });
     });
 

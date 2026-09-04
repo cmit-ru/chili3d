@@ -5,6 +5,12 @@
     gap: 8px;
     color: var(--foreground-color);
 
+    /* Подпись группы: «Прилипать к:» и «ещё:» */
+    .caption {
+        font-size: 12px;
+        user-select: none;
+    }
+
     div {
         display: flex;
         flex-direction: row;

@@ -9,44 +9,53 @@ import {
     ObjectSnapTypes,
     ObjectSnapTypeUtils,
 } from "@chili3d/core";
-import { div, input, label } from "@chili3d/element";
+import { div, input, label, span } from "@chili3d/element";
 import style from "./snapConfig.module.css";
 
-const SnapTypes: Array<{
+interface SnapTypeItem {
     type: ObjectSnapType;
     display: I18nKeys;
-}> = [
+}
+
+/** Плашка читается как одна фраза: подпись-вопрос «Прилипать к:», а галочки —
+ *  ответы на неё. Первые четыре понятны ребёнку сразу, остальные идут после
+ *  слова «ещё». Подписи берутся из отдельных ключей `snapTo.*`: те же `snap.*`
+ *  показываются подсказкой у курсора, где нужен другой падеж. */
+const PrimarySnapTypes: SnapTypeItem[] = [
     {
         type: ObjectSnapTypes.endPoint,
-        display: "snap.end",
+        display: "snapTo.end",
     },
     {
         type: ObjectSnapTypes.midPoint,
-        display: "snap.mid",
+        display: "snapTo.mid",
     },
     {
         type: ObjectSnapTypes.center,
-        display: "snap.center",
-    },
-    {
-        type: ObjectSnapTypes.perpendicular,
-        display: "snap.perpendicular",
+        display: "snapTo.center",
     },
     {
         type: ObjectSnapTypes.intersection,
-        display: "snap.intersection",
+        display: "snapTo.intersection",
+    },
+];
+
+const MoreSnapTypes: SnapTypeItem[] = [
+    {
+        type: ObjectSnapTypes.perpendicular,
+        display: "snapTo.perpendicular",
     },
     {
         type: ObjectSnapTypes.tangent,
-        display: "snap.tangent",
+        display: "snapTo.tangent",
     },
     {
         type: ObjectSnapTypes.onCurve,
-        display: "snap.nearCurve",
+        display: "snapTo.nearCurve",
     },
     {
         type: ObjectSnapTypes.onSurface,
-        display: "snap.onSurface",
+        display: "snapTo.onSurface",
     },
 ];
 
@@ -74,22 +83,34 @@ export class SnapConfig extends HTMLElement {
         }
     }
 
+    private caption(key: I18nKeys) {
+        return span({
+            className: style.caption,
+            textContent: new Localize(key),
+        });
+    }
+
+    private snapCheckbox(snapType: SnapTypeItem) {
+        return div(
+            input({
+                type: "checkbox",
+                id: `snap-${snapType.type}`,
+                checked: ObjectSnapTypeUtils.hasType(Config.instance.snapType, snapType.type),
+                onclick: () => this.handleSnapClick(snapType.type),
+            }),
+            label({
+                htmlFor: `snap-${snapType.type}`,
+                textContent: new Localize(snapType.display),
+            }),
+        );
+    }
+
     private render() {
         this.append(
-            ...SnapTypes.map((snapType) => {
-                return div(
-                    input({
-                        type: "checkbox",
-                        id: `snap-${snapType.type}`,
-                        checked: ObjectSnapTypeUtils.hasType(Config.instance.snapType, snapType.type),
-                        onclick: () => this.handleSnapClick(snapType.type),
-                    }),
-                    label({
-                        htmlFor: `snap-${snapType.type}`,
-                        textContent: new Localize(snapType.display),
-                    }),
-                );
-            }),
+            this.caption("snapTo.title"),
+            ...PrimarySnapTypes.map((snapType) => this.snapCheckbox(snapType)),
+            this.caption("snapTo.more"),
+            ...MoreSnapTypes.map((snapType) => this.snapCheckbox(snapType)),
             div(
                 input({
                     type: "checkbox",
