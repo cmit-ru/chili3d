@@ -158,6 +158,29 @@ export function высотаВверх(section: IShape, height: number): number 
     return normal.z < -1e-6 ? -height : height;
 }
 
+/**
+ * Грань, которую снимает полость. Ядро убирает ровно те грани, что перечислены:
+ * штатная команда «Полость» просит выбрать их мышью, а помощнику выбирать некому,
+ * и без списка вышла бы запаянная пустота внутри тела — снаружи её не видно.
+ * Для ребёнка «сделай полость в стакане» — это открытый сверху стакан со стенками,
+ * поэтому снимаем верхнюю грань: ту, что лежит выше всех (наибольшее min.z рамки).
+ * У бруска это крышка, у цилиндра — верхний круг.
+ */
+export function верхняяГрань(shape: IShape): IShape {
+    const faces = shape.findSubShapes(ShapeTypes.face);
+    if (faces.length === 0) throw new Error("у фигуры нет граней");
+    let верх = faces[0];
+    let верхZ = верх.boundingBox().min.z;
+    for (const грань of faces) {
+        const z = грань.boundingBox().min.z;
+        if (z > верхZ) {
+            верх = грань;
+            верхZ = z;
+        }
+    }
+    return верх;
+}
+
 export class AiOps {
     private busy = false;
     private wasActive = false;
@@ -801,9 +824,20 @@ export class AiOps {
             }
             case "полость": {
                 const source = this.node(op.node);
-                const result = shapeFactory.makeThickSolidBySimple(
-                    this.shapeOf(source),
-                    -Math.abs(Number(op.thickness)),
+                const shape = this.shapeOf(source);
+                const thickness = Number(op.thickness);
+                // Нулевую и пропущенную толщину ядро встречает ловушкой wasm, а не
+                // ошибкой: без проверки помощник получал бы «[object WebAssembly.Exception]».
+                if (!(thickness > 0)) throw new Error("нужна толщина стенки больше нуля");
+                // Полость ядро умеет только «по граням»: makeThickSolidBySimple ждёт
+                // незамкнутую оболочку и на готовом теле всегда отвечает «Failed to create
+                // thick solid» (B-188). Отрицательная толщина растит стенки внутрь, наружные
+                // размеры фигуры остаются прежними — как и ждёт ребёнок.
+                const result = shapeFactory.makeThickSolidByJoin(
+                    shape,
+                    [верхняяГрань(shape)],
+                    -thickness,
+                    "arc",
                 );
                 const fresh = new EditableShapeNode({
                     document: this.doc,

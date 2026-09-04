@@ -4,14 +4,15 @@
 // Форк «Макетки»: «выдавить» помощника тянет вверх при положительной высоте,
 // как бы ни был обойдён контур (B-164). На заглушках этого не увидеть: нормаль
 // грани считает настоящее ядро OCCT, и именно она у контура «по часовой»
-// смотрит вниз.
+// смотрит вниз. По той же причине здесь и «полость» (B-188): что она падает на
+// любом теле, видно только на настоящем ядре.
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { GeometryUtils, type IFace, XYZ } from "@chili3d/core";
+import { GeometryUtils, type IFace, type ISolid, Plane, XYZ } from "@chili3d/core";
 import { initWasm, ShapeFactory } from "@chili3d/wasm";
 import { beforeAll, describe, expect, test } from "@rstest/core";
-import { высотаВверх } from "../src/aiOps";
+import { верхняяГрань, высотаВверх } from "../src/aiOps";
 
 let фабрика: ShapeFactory;
 
@@ -74,5 +75,30 @@ describe("выдавливание контура на ядре OCCT", () => {
             expect(рамка.min.z).toBeCloseTo(-15, 5);
             expect(рамка.max.z).toBeCloseTo(0, 5);
         }
+    });
+});
+
+describe("полость на ядре OCCT", () => {
+    /** Брусок 40×40×40 — на нём полость помощника падала так же, как на цилиндре. */
+    function брусок() {
+        const тело = фабрика.box(Plane.XY, 40, 40, 40);
+        if (!тело.isOk) throw new Error(String(тело.error));
+        return тело.value;
+    }
+
+    test("простая полость не работает на замкнутом теле — тут и была ошибка", () => {
+        expect(фабрика.makeThickSolidBySimple(брусок(), -3).isOk).toBe(false);
+    });
+
+    test("полость по верхней грани: наружные размеры те же, стенки 3 мм, верх открыт", () => {
+        const тело = брусок();
+        const полость = фабрика.makeThickSolidByJoin(тело, [верхняяГрань(тело)], -3, "arc");
+        expect(полость.isOk).toBe(true);
+
+        const рамка = полость.value.boundingBox();
+        expect(рамка.min.z).toBeCloseTo(0, 5);
+        expect(рамка.max.z).toBeCloseTo(40, 5);
+        // Нутро 34×34×37: по 3 мм стенок с четырёх сторон и снизу, сверху дырка.
+        expect((полость.value as ISolid).volume()).toBeCloseTo(40 ** 3 - 34 * 34 * 37, 3);
     });
 });
