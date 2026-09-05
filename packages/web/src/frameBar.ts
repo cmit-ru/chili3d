@@ -24,6 +24,8 @@ export interface FrameUser {
     name: string;
     avatar: string;
     role: string;
+    /** Есть ли действующая подписка — от неё зависит дверь «Подписка» в полосе. */
+    subscribed?: boolean;
 }
 
 /** Ответ на «Сделать копию»/«Забрать себе»: работа, отказ по месту или ничего. */
@@ -289,7 +291,11 @@ export class FrameBar {
         if (people) {
             people.style.gap = "8px";
             people.append(this.helpBox());
-            if (options.user) this.renderUser(people, options.user);
+            // Дверь к подписке — взрослому без действующей подписки и гостю
+            // (`frame-contract.md`, зона 5; владелец, 05.09.2026).
+            const user = options.user;
+            if (!user || (user.role === "external" && !user.subscribed)) people.append(this.subscribeLink());
+            if (user) this.renderUser(people, user);
             else people.append(...this.guestButtons());
         }
         // У гостя обращений нет — звать его нечем, и точка не зажжётся.
@@ -667,6 +673,22 @@ export class FrameBar {
     /** Гость: вместо аватара одна дверь — «Войти» (`frame-contract.md`, «Роли»).
      *  Рядом с ней — отзыв: у гостя нет меню человека, а сообщить об ошибке он
      *  должен мочь ровно так же, как ученик. Обе кнопки тихие и одинаковые. */
+    /**
+     * «Подписка» — в новой вкладке: из открытой работы не уходим, а после оплаты здесь
+     * обновлять нечего — предел сервер проверяет при создании работы. Слова и адрес те же,
+     * что в мастерской схем.
+     */
+    private subscribeLink(): HTMLElement {
+        const a = document.createElement("a");
+        a.href = "/prices?plan=personal&from=editor#checkout";
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.textContent = "Подписка";
+        a.dataset["frameSubscribe"] = "";
+        a.style.cssText = GHOST_LINK;
+        return a;
+    }
+
     private guestButtons(): HTMLElement[] {
         const login = document.createElement("a");
         login.href = "/login";
