@@ -10,17 +10,20 @@ import { PreviewShots } from "../src/preview";
 
 function цель() {
     const отправлено: string[] = [];
+    const наЗакрытии: boolean[] = [];
     let снимков = 0;
     return {
         отправлено,
+        наЗакрытии,
         снимков: () => снимков,
         target: {
             snapshot: () => {
                 снимков += 1;
                 return `кадр-${снимков}`;
             },
-            send: async (dataUrl: string) => {
+            send: async (dataUrl: string, closing?: boolean) => {
                 отправлено.push(dataUrl);
+                наЗакрытии.push(Boolean(closing));
             },
         },
     };
@@ -81,7 +84,7 @@ describe("превью вне такта сохранения", () => {
     });
 
     test("при уходе со страницы снимок делается сразу, кадра уже не будет", async () => {
-        const { target, отправлено } = цель();
+        const { target, отправлено, наЗакрытии } = цель();
         const превью = new PreviewShots(target, 60_000);
         превью.start();
         превью.workChanged();
@@ -90,6 +93,29 @@ describe("превью вне такта сохранения", () => {
         await Promise.resolve();
 
         expect(отправлено).toEqual(["кадр-1"]);
+        // Хранилищу надо знать, что вкладка закрывается: обычный запрос браузер
+        // на уходе со страницы обрывает, и картинка не доезжала.
+        expect(наЗакрытии).toEqual([true]);
+        превью.stop();
+    });
+
+    test("работу без картинки снимаем при открытии, не дожидаясь минуты", async () => {
+        const { target, отправлено, наЗакрытии } = цель();
+        const превью = new PreviewShots(target, 60_000);
+        превью.start();
+
+        превью.shootNow();
+        expect(кадры.length).toBe(1);
+        кадры.shift()?.();
+        await Promise.resolve();
+
+        expect(отправлено).toEqual(["кадр-1"]);
+        expect(наЗакрытии).toEqual([false]);
+
+        // Разовый снимок не считается правкой: следующая минута молчит.
+        rs.advanceTimersByTime(60_000);
+        expect(кадры.length).toBe(0);
+        expect(отправлено.length).toBe(1);
         превью.stop();
     });
 

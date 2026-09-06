@@ -311,13 +311,20 @@ export class CloudStorage implements IStorage {
      * сюда от таймера редактора, а не из такта сохранения — ТЗ §11,
      * `packages/web/src/preview.ts`. Реже раза в минуту: канал класса делится
      * на тридцать человек.
+     *
+     * `closing` — вкладку закрывают. Обычный запрос браузер на уходе со страницы
+     * обрывает, поэтому снимок из `pagehide` шлём с `keepalive`, и у работы,
+     * законченной быстрее минуты, картинка всё-таки появляется. Только там: у
+     * `keepalive` предел тела 64 КБ, а превью тяжёлой модели подходит к нему
+     * вплотную (на бою встречались 44 КБ) — обычный снимок не ограничиваем.
      */
-    async saveThumbnail(dataUrl: string): Promise<void> {
+    async saveThumbnail(dataUrl: string, closing = false): Promise<void> {
         const projectId = projectIdFromLocation();
         if (!projectId) return;
         await fetch(`/api/projects/${projectId}/preview`, {
             method: "POST",
             credentials: "same-origin",
+            keepalive: closing,
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ thumb: dataUrl }),
         }).catch(() => undefined);

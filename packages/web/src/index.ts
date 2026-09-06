@@ -71,6 +71,8 @@ interface ProjectMeta {
      *  Сервер шлёт адрес вместе с подписью — той же, что видит мастерская схем. */
     backTo?: { href: string; label?: string };
     readOnly?: boolean;
+    /** Есть ли у работы картинка в кабинете: нет — снимем одну при открытии. */
+    hasPreview?: boolean;
     showHint?: boolean;
     sharedPc?: boolean;
     economyMode?: boolean;
@@ -441,12 +443,24 @@ async function openProject(
     if (storage) {
         const preview = new PreviewShots({
             snapshot: () => app.activeView?.toImage(320),
-            send: (dataUrl) => storage.saveThumbnail(dataUrl),
+            send: (dataUrl, closing) => storage.saveThumbnail(dataUrl, closing),
         });
         storage.onStateChange((state) => {
             if (state === "saved") preview.workChanged();
         });
         preview.start();
+        // У работы без картинки снимаем кадр сразу при открытии: до 03.09.2026
+        // снимок делал такт сохранения, и всё, что закрыли раньше первой минуты
+        // таймера, осталось в кабинете серой плиткой. Задним числом на сервере
+        // кадр не получить — модель рисует только мастерская. Так же чинит старые
+        // схемы мастерская схем (B-144).
+        //
+        // Пустую сцену не снимаем: заглушка честнее пустого кадра. Чужую работу
+        // тоже — картинка принадлежит хозяину, и сервер такой снимок не примет.
+        const пусто = doc.modelManager.rootNode.size() === 0;
+        if (!meta?.hasPreview && !meta?.viewingOthers && !meta?.readOnly && !пусто) {
+            preview.shootNow();
+        }
     }
 
     // Исполнитель пакетов построения ИИ-помощника (фаза Б): модель собирается

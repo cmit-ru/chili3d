@@ -11,7 +11,8 @@
 /** Откуда брать снимок и куда его отправлять (ТЗ §11: тот же рендерер, 320 px). */
 export interface PreviewTarget {
     snapshot(): string | undefined;
-    send(dataUrl: string): Promise<void>;
+    /** `closing` — вкладку закрывают: запрос должен пережить уход со страницы. */
+    send(dataUrl: string, closing?: boolean): Promise<void>;
 }
 
 const PERIOD_MS = 60_000;
@@ -31,6 +32,17 @@ export class PreviewShots {
         this.changed = true;
     }
 
+    /**
+     * Снять кадр не дожидаясь минуты. Нужно при открытии работы, у которой
+     * картинки в кабинете нет вовсе: до 03.09.2026 снимок делал такт сохранения,
+     * и у всего, что закрыли раньше первой минуты, плитка осталась серой. Так же
+     * лечит старые схемы мастерская схем (B-144).
+     */
+    shootNow() {
+        this.changed = true;
+        this.plan();
+    }
+
     start() {
         if (this.timer !== undefined) return;
         this.timer = window.setInterval(() => this.plan(), this.period);
@@ -45,7 +57,7 @@ export class PreviewShots {
 
     // Вкладку закрывают, кадра уже не будет: снимаем прямо здесь.
     private readonly onHide = () => {
-        if (this.changed) void this.shoot();
+        if (this.changed) void this.shoot(true);
     };
 
     /**
@@ -62,11 +74,11 @@ export class PreviewShots {
         });
     }
 
-    private async shoot() {
+    private async shoot(closing = false) {
         this.changed = false;
         try {
             const dataUrl = this.target.snapshot();
-            if (dataUrl) await this.target.send(dataUrl);
+            if (dataUrl) await this.target.send(dataUrl, closing);
         } catch (error) {
             // Ошибка превью не отменяет и не задерживает сохранение (ТЗ §11).
             console.warn("[превью]", error);
