@@ -305,23 +305,59 @@ async function addDeferredNodes(doc: IDocument, spinner?: ModelSpinner) {
 }
 
 /**
- * Дождаться, пока в сцене появится хоть одна нарисованная фигура.
+ * Дождаться, пока снимать станет что и чем.
  *
- * Тела работы недостаточно: узлы приезжают с сервера сразу, а в сцену попадают
- * позже — геометрию считает wasm. Снимок, сделанный раньше, показывает пустую
- * сцену с одними осями: так на бою 06.09.2026 получила пустой кадр работа,
- * заведённая из заготовки карточки (B-223).
+ * Двух условий мало по отдельности. Тела работы недостаточно: узлы приезжают с
+ * сервера сразу, а в сцену попадают позже — геометрию считает wasm. И самого
+ * вида недостаточно: пока окно редактора не встало на страницу, холст держит
+ * размер по умолчанию 300×150, и снимок уходит полноразмерным PNG пустой сцены.
+ * Оба случая случились на бою 06.09.2026 с работой из заготовки карточки (B-223).
  *
  * Ждём ограниченно: не дождались — картинки просто не будет, серая плитка
  * честнее пустого кадра.
  */
-async function дождатьсяФигур(doc: IDocument, пределMs = 20_000): Promise<boolean> {
+async function дождатьсяСцены(app: IApplication, doc: IDocument, пределMs = 20_000): Promise<boolean> {
+    const готово = () =>
+        doc.visual.context.shapeCount > 0 &&
+        (app.activeView?.width ?? 0) > 1 &&
+        (app.activeView?.height ?? 0) > 1;
     const срок = Date.now() + пределMs;
     while (Date.now() < срок) {
-        if (doc.visual.context.shapeCount > 0) return true;
+        if (готово()) {
+            // Размер окна доезжает до рендерера через ResizeObserver с задержкой
+            // в 100 мс (`threeView.ts`) — даём ей пройти.
+            await new Promise((resolve) => setTimeout(resolve, 400));
+            return готово();
+        }
         await new Promise((resolve) => setTimeout(resolve, 250));
     }
-    return doc.visual.context.shapeCount > 0;
+    return false;
+}
+
+/**
+ * Кадр с наводкой камеры на модель: камера отъезжает так, чтобы модель влезла в
+ * кадр, снимок, камера обратно.
+ *
+ * Без наводки первая картинка работы пустая. При открытии камера смотрит в
+ * начало координат с большого расстояния, и брусок 40 мм из заготовки в кадр не
+ * попадает вовсе: на бою 06.09.2026 в окне были одни оси, пока не нажать
+ * «В экран». Тем же приёмом снимает ИИ-помощник (`aiOps.ts`).
+ *
+ * Камеру возвращаем на место: тот, кто открыл работу, наводки не должен
+ * заметить — это снимок для кабинета, а не команда вида.
+ */
+function снимокСНаводкой(app: IApplication): string | undefined {
+    const view = app.activeView;
+    if (!view) return undefined;
+    const camera = view.cameraController;
+    const было = { eye: camera.cameraPosition, target: camera.cameraTarget, up: camera.cameraUp };
+    try {
+        camera.fitContent();
+        return view.toImage(320);
+    } finally {
+        camera.lookAt(было.eye, было.target, было.up);
+        view.document.visual.update();
+    }
 }
 
 async function openProject(
@@ -462,7 +498,7 @@ async function openProject(
     // сохранить — впустую канал класса не занимаем.
     if (storage) {
         const preview = new PreviewShots({
-            snapshot: () => app.activeView?.toImage(320),
+            snapshot: (наводя) => (наводя ? снимокСНаводкой(app) : app.activeView?.toImage(320)),
             send: (dataUrl, closing) => storage.saveThumbnail(dataUrl, closing),
         });
         storage.onStateChange((state) => {
@@ -478,9 +514,9 @@ async function openProject(
         // Чужую работу не снимаем: картинка принадлежит хозяину, и сервер такой
         // снимок не примет.
         if (!meta?.hasPreview && !meta?.viewingOthers && !meta?.readOnly) {
-            void дождатьсяФигур(doc).then((есть) => {
+            void дождатьсяСцены(app, doc).then((готово) => {
                 // Пустую сцену не снимаем: заглушка честнее пустого кадра.
-                if (есть) preview.shootNow();
+                if (готово) preview.shootNow();
             });
         }
     }
