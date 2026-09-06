@@ -818,7 +818,7 @@ export class FrameBar {
         // Куда «домой» из меню человека — по роли и по тому, чья работа открыта
         // (`frame-contract.md`, таблица «Роли»).
         const home = this.options.viewing && user.role === "teacher" ? "/teach" : "/projects";
-        const homeText = home === "/teach" ? "К группам" : "Мои работы";
+        const homeText = home === "/teach" ? "Мои группы" : "Мои работы";
 
         // Последний пункт — выход, и слово у него зависит не от мастерской, а от
         // того, чей это компьютер (`frame-contract.md`, ключ `выход`; в схемах
