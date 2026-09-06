@@ -357,7 +357,10 @@ function снимокМодели(app: IApplication): string | undefined {
         return view.toImage(320);
     } finally {
         camera.lookAt(было.eye, было.target, было.up);
-        view.document.visual.update();
+        // Перерисовываем немедленно, а не через `update()`: тот лишь помечает вид,
+        // а рисует он себя на следующем кадре — и один кадр браузер показывал бы
+        // наведённый вид. Раз в минуту это выглядело бы как рывок под рукой.
+        view.render();
     }
 }
 

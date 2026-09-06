@@ -43,6 +43,8 @@ export interface IView extends IPropertyChanged, IDisposable {
     name: string;
     workplane: Plane;
     update(): void;
+    /** Перерисовать вид сейчас же, не дожидаясь ближайшего кадра. */
+    render(): void;
     up(): XYZ;
     /** maxSize — сторона превью в пикселях; без него отдаётся полный холст. */
     toImage(maxSize?: number): string;

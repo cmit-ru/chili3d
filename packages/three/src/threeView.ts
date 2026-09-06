@@ -278,6 +278,16 @@ export class ThreeView extends Observable implements IView {
         this._needsUpdate = true;
     }
 
+    render() {
+        const dir = this.camera.position.clone().sub(this.cameraController.target);
+        this.dynamicLight.position.copy(dir);
+        this._renderer.render(this._scene, this.camera);
+        this._cssRenderer.render(this._scene, this.camera);
+        this._gizmo?.update();
+
+        this._needsUpdate = false;
+    }
+
     private animate() {
         if (this._isClosed) {
             return;
@@ -287,13 +297,7 @@ export class ThreeView extends Observable implements IView {
         });
         if (!this._needsUpdate) return;
 
-        const dir = this.camera.position.clone().sub(this.cameraController.target);
-        this.dynamicLight.position.copy(dir);
-        this._renderer.render(this._scene, this.camera);
-        this._cssRenderer.render(this._scene, this.camera);
-        this._gizmo?.update();
-
-        this._needsUpdate = false;
+        this.render();
     }
 
     resize(width: number, height: number) {
