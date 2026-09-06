@@ -304,6 +304,26 @@ async function addDeferredNodes(doc: IDocument, spinner?: ModelSpinner) {
     }
 }
 
+/**
+ * Дождаться, пока в сцене появится хоть одна нарисованная фигура.
+ *
+ * Тела работы недостаточно: узлы приезжают с сервера сразу, а в сцену попадают
+ * позже — геометрию считает wasm. Снимок, сделанный раньше, показывает пустую
+ * сцену с одними осями: так на бою 06.09.2026 получила пустой кадр работа,
+ * заведённая из заготовки карточки (B-223).
+ *
+ * Ждём ограниченно: не дождались — картинки просто не будет, серая плитка
+ * честнее пустого кадра.
+ */
+async function дождатьсяФигур(doc: IDocument, пределMs = 20_000): Promise<boolean> {
+    const срок = Date.now() + пределMs;
+    while (Date.now() < срок) {
+        if (doc.visual.context.shapeCount > 0) return true;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    return doc.visual.context.shapeCount > 0;
+}
+
 async function openProject(
     app: IApplication,
     autoSave: AutoSave,
@@ -455,11 +475,13 @@ async function openProject(
         // кадр не получить — модель рисует только мастерская. Так же чинит старые
         // схемы мастерская схем (B-144).
         //
-        // Пустую сцену не снимаем: заглушка честнее пустого кадра. Чужую работу
-        // тоже — картинка принадлежит хозяину, и сервер такой снимок не примет.
-        const пусто = doc.modelManager.rootNode.size() === 0;
-        if (!meta?.hasPreview && !meta?.viewingOthers && !meta?.readOnly && !пусто) {
-            preview.shootNow();
+        // Чужую работу не снимаем: картинка принадлежит хозяину, и сервер такой
+        // снимок не примет.
+        if (!meta?.hasPreview && !meta?.viewingOthers && !meta?.readOnly) {
+            void дождатьсяФигур(doc).then((есть) => {
+                // Пустую сцену не снимаем: заглушка честнее пустого кадра.
+                if (есть) preview.shootNow();
+            });
         }
     }
 
