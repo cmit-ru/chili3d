@@ -48,6 +48,7 @@ import { ScreenLock } from "./screenLock";
 import { sendEvent } from "./track";
 import { отметитьКоманду } from "./trail";
 import { ViewBanner } from "./viewBanner";
+import { ViewMemory, применитьРакурс, ракурсКамеры } from "./viewMemory";
 import { cachedSceneVolumeMm3 } from "./volume";
 
 const loading = new Loading();
@@ -73,6 +74,8 @@ interface ProjectMeta {
     readOnly?: boolean;
     /** Есть ли у работы картинка в кабинете: нет — снимем одну при открытии. */
     hasPreview?: boolean;
+    /** Ракурс последнего закрытия: с ним работа и откроется. Разбирает `viewMemory`. */
+    camera?: unknown;
     showHint?: boolean;
     sharedPc?: boolean;
     economyMode?: boolean;
@@ -505,19 +508,26 @@ async function openProject(
     // не гоняет полный обход тел каждые несколько секунд (B-051).
     if (storage) storage.volumeProvider = () => cachedSceneVolumeMm3(doc, 20_000);
 
-    // Работа открывается наведённой на модель (B-229, решение владельца
-    // 06.09.2026). Без этого в окне пусто: камера смотрит в начало координат с
-    // большого расстояния, и модель школьного размера — брусок 40 мм из
-    // заготовки — в кадр не попадает вовсе, пока не нажать «В экран». Сам
-    // Chili3D зовёт `fitContent` во всех своих ветках открытия
-    // (`openDocument.ts`, `application.ts`, `utils.ts`); облачная была
-    // единственной без него.
+    // Работа открывается тем ракурсом, каким её закрыли (просьба владельца
+    // 06.09.2026), а если ракурс не запомнен — наведённой на модель (B-229).
+    // Без наводки в окне пусто: камера смотрит в начало координат с большого
+    // расстояния, и модель школьного размера — брусок 40 мм из заготовки — в кадр
+    // не попадает вовсе, пока не нажать «В экран». Сам Chili3D зовёт `fitContent`
+    // во всех своих ветках открытия (`openDocument.ts`, `application.ts`,
+    // `utils.ts`); облачная была единственной без него.
     //
     // Ждать обязательно: фигуру рисует wasm уже после того, как узлы приехали с
     // сервера, а наводить не по чему — значит наводить в пустоту.
     const сцена = дождатьсяСцены(app, doc);
     const наводка = сцена.then((готово) => {
-        if (готово) app.activeView?.cameraController.fitContent();
+        const view = app.activeView;
+        if (!готово || !view) return;
+        if (!применитьРакурс(view.cameraController, meta?.camera)) {
+            view.cameraController.fitContent();
+        }
+        // Камера сама кадр не просит: без этого ракурс ждал бы ближайшей
+        // перерисовки, которая случится по какому-нибудь другому поводу.
+        view.update();
     });
 
     // Превью для ленты работ снимает таймер, а не такт сохранения (ТЗ §11, B-178):
@@ -545,6 +555,22 @@ async function openProject(
                 // Пустую сцену не снимаем: заглушка честнее пустого кадра.
                 if (готово) preview.shootNow();
             });
+        }
+
+        // Ракурс запоминаем у работы: в следующий раз она откроется так же, как
+        // её закрыли. В чужой работе и в просмотре не запоминаем — камера там
+        // принадлежит хозяину, и сервер такую запись не примет.
+        if (!meta?.viewingOthers && !meta?.readOnly) {
+            const память = new ViewMemory({
+                camera: () => {
+                    const camera = app.activeView?.cameraController;
+                    return camera ? ракурсКамеры(camera) : undefined;
+                },
+                send: (ракурс, closing) => storage.saveCamera(ракурс, closing),
+            });
+            // Заводим после наводки: иначе за исходный сошёл бы ракурс до неё, и
+            // первый же такт записал бы наведённый вид как повёрнутый ребёнком.
+            void наводка.then(() => память.start());
         }
     }
 

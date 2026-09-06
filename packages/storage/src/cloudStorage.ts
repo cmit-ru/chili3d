@@ -329,4 +329,24 @@ export class CloudStorage implements IStorage {
             body: JSON.stringify({ thumb: dataUrl }),
         }).catch(() => undefined);
     }
+
+    /**
+     * Ракурс работы: куда смотрела камера, когда работу закрыли. Тело — сотня
+     * байт, поэтому и на уходе со страницы шлём тем же путём, с `keepalive`.
+     *
+     * Ошибку сети не глотаем, в отличие от превью: память вида по ней узнаёт,
+     * что ракурс не доехал, и повторит на следующем такте.
+     */
+    async saveCamera(camera: object, closing = false): Promise<void> {
+        const projectId = projectIdFromLocation();
+        if (!projectId) return;
+        const response = await fetch(`/api/projects/${projectId}/view`, {
+            method: "POST",
+            credentials: "same-origin",
+            keepalive: closing,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ camera }),
+        }).catch(() => undefined);
+        if (!response) throw new Error("ракурс не ушёл: нет ответа");
+    }
 }
