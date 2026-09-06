@@ -10,8 +10,7 @@
 
 /** Откуда брать снимок и куда его отправлять (ТЗ §11: тот же рендерер, 320 px). */
 export interface PreviewTarget {
-    /** `наводя` — первая картинка работы: перед снимком навести камеру на модель. */
-    snapshot(наводя?: boolean): string | undefined;
+    snapshot(): string | undefined;
     /** `closing` — вкладку закрывают: запрос должен пережить уход со страницы. */
     send(dataUrl: string, closing?: boolean): Promise<void>;
 }
@@ -22,7 +21,6 @@ export class PreviewShots {
     private timer?: number;
     private planned = false;
     private changed = false;
-    private наводить = false;
 
     constructor(
         private readonly target: PreviewTarget,
@@ -42,9 +40,6 @@ export class PreviewShots {
      */
     shootNow() {
         this.changed = true;
-        // Первый кадр снимаем с наводкой: камера при открытии смотрит мимо
-        // модели, и без наводки в кабинет уходит пустая сцена (B-223).
-        this.наводить = true;
         this.plan();
     }
 
@@ -81,10 +76,8 @@ export class PreviewShots {
 
     private async shoot(closing = false) {
         this.changed = false;
-        const наводя = this.наводить;
-        this.наводить = false;
         try {
-            const dataUrl = this.target.snapshot(наводя);
+            const dataUrl = this.target.snapshot();
             if (dataUrl) await this.target.send(dataUrl, closing);
         } catch (error) {
             // Ошибка превью не отменяет и не задерживает сохранение (ТЗ §11).
