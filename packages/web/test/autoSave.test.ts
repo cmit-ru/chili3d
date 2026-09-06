@@ -5,7 +5,15 @@
 // переименовывают и убирают мимо истории — без отмены, — поэтому одной
 // подписки на историю мало: новый вид жил ровно до перезагрузки страницы.
 
-import { Act, History, type IApplication, type IDocument, ObservableCollection, XYZ } from "@chili3d/core";
+import {
+    Act,
+    History,
+    type IApplication,
+    type IDocument,
+    type IHistoryRecord,
+    ObservableCollection,
+    XYZ,
+} from "@chili3d/core";
 import { afterEach, beforeEach, describe, expect, rs, test } from "@rstest/core";
 import { AutoSave } from "../src/autoSave";
 
@@ -19,6 +27,11 @@ function работа() {
         },
     };
     return { документ: документ as unknown as IDocument, сохранений: () => сохранений };
+}
+
+/** Правка модели: фигура, скругление, вычитание, перемещение — всё это записи истории. */
+function правка(): IHistoryRecord {
+    return { undo: () => {}, redo: () => {}, dispose: () => {} } as unknown as IHistoryRecord;
 }
 
 function вид(name: string) {
@@ -115,5 +128,93 @@ describe("автосохранение и виды", () => {
         автосейв.stop();
         документ.acts.push(вид("Спереди"));
         expect(автосейв.hasPending()).toBe(false);
+    });
+});
+
+// Форк «Макетки»: правки, сделанные перед самой перезагрузкой, пропадали, а
+// полоса всё это время говорила «Сохранено» (B-208). Две причины: уход со
+// страницы не доводил запрос до сервера, а каркасу никто не сообщал, что
+// правка ждёт записи.
+describe("автосохранение при уходе со страницы и знак для полосы", () => {
+    beforeEach(() => {
+        rs.useFakeTimers();
+    });
+    afterEach(() => {
+        rs.useRealTimers();
+    });
+
+    function хранилище() {
+        let закрытий = 0;
+        const app = { storage: { markClosing: () => (закрытий += 1) } } as unknown as IApplication;
+        return { app, закрытий: () => закрытий };
+    }
+
+    test("правка модели поднимает знак для полосы", () => {
+        const { документ } = работа();
+        let знаков = 0;
+        const автосейв = new AutoSave({} as IApplication);
+        автосейв.onPending = () => (знаков += 1);
+        автосейв.watch(документ);
+
+        документ.history.add(правка());
+        expect(знаков).toBe(1);
+
+        // Вид — тоже правка, хотя истории про него не известно (B-163).
+        документ.acts.push(вид("Спереди"));
+        expect(знаков).toBe(2);
+    });
+
+    test("имя работы меняется мимо истории — знак поднимает `touch`", () => {
+        const { документ } = работа();
+        let знаков = 0;
+        const автосейв = new AutoSave({} as IApplication);
+        автосейв.onPending = () => (знаков += 1);
+        автосейв.watch(документ);
+
+        автосейв.touch(документ);
+        expect(знаков).toBe(1);
+        expect(автосейв.hasPending()).toBe(true);
+    });
+
+    test("остановленное автосохранение знака не поднимает", () => {
+        const { документ } = работа();
+        let знаков = 0;
+        const автосейв = new AutoSave({} as IApplication);
+        автосейв.onPending = () => (знаков += 1);
+        автосейв.watch(документ);
+        автосейв.stop();
+
+        документ.history.add(правка());
+        expect(знаков).toBe(0);
+    });
+
+    test("уход со страницы с несохранённой правкой: хранилище предупреждено, работа уходит", () => {
+        const { документ, сохранений } = работа();
+        const { app, закрытий } = хранилище();
+        const автосейв = new AutoSave(app);
+        автосейв.watch(документ);
+        автосейв.attachUnloadGuard(документ);
+
+        документ.history.add(правка());
+        window.dispatchEvent(new Event("pagehide"));
+
+        expect(закрытий()).toBe(1);
+        expect(сохранений()).toBe(1);
+    });
+
+    test("уходить с сохранённой работой — не слать ничего: место `keepalive` нужно снимку", async () => {
+        const { документ, сохранений } = работа();
+        const { app, закрытий } = хранилище();
+        const автосейв = new AutoSave(app);
+        автосейв.watch(документ);
+        автосейв.attachUnloadGuard(документ);
+
+        документ.history.add(правка());
+        await rs.advanceTimersByTimeAsync(12_000);
+        expect(сохранений()).toBe(1);
+
+        window.dispatchEvent(new Event("pagehide"));
+        expect(закрытий()).toBe(0);
+        expect(сохранений()).toBe(1);
     });
 });

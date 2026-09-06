@@ -191,3 +191,48 @@ describe("Зона «работа» в полосе", () => {
         expect(подсказка.textContent).toBe("В песочнице работы ещё нет — сначала сохрани её себе");
     });
 });
+
+// Форк «Макетки»: полоса говорила «Сохранено» всегда — и сразу после правки, и
+// когда правка потом пропадала при перезагрузке (B-208). Слово «Сохранено»
+// имеет право появляться только после ответа сервера.
+describe("Слово о сохранении не забегает вперёд сервера", () => {
+    const своя = (over: Partial<FrameBarOptions> = {}) =>
+        опции({
+            projectId: "7",
+            sandbox: false,
+            user: { name: "Аня", avatar: "", role: "ученик" },
+            ...over,
+        });
+
+    const слово = () => document.querySelector("[data-frame-state]")?.textContent;
+
+    beforeEach(() => {
+        document.body.innerHTML = '<div id="frame-work"></div><div id="frame-user"></div>';
+    });
+
+    afterEach(() => {
+        document.body.innerHTML = "";
+    });
+
+    test("правка в очереди — «Сохраняю…»; «Сохранено» возвращает только сервер", () => {
+        const полоса = new FrameBar(своя());
+        expect(слово()).toBe("✓ Сохранено");
+
+        полоса.markPending();
+        expect(слово()).toBe("◌ Сохраняю…");
+
+        полоса.setSaveState("saved");
+        expect(слово()).toBe("✓ Сохранено");
+    });
+
+    test("тревожное слово правка не перебивает", () => {
+        const полоса = new FrameBar(своя());
+        полоса.setSaveState("offline");
+        полоса.markPending();
+        expect(слово()).toBe("! Нет интернета");
+
+        полоса.setSaveState("conflict");
+        полоса.markPending();
+        expect(слово()).toBe("! Не могу сохранить — работа открыта ещё где-то");
+    });
+});

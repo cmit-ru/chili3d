@@ -22,6 +22,12 @@ export class AutoSave {
     private stopped = false;
     private attached = new WeakSet<IDocument>();
 
+    /**
+     * Правка встала в очередь на запись. Каркас по этому знаку перестаёт
+     * говорить «Сохранено»: до подтверждения сервера это неправда (B-208).
+     */
+    onPending?: () => void;
+
     constructor(
         private readonly app: IApplication,
         /** Пачка правок уходит на запись — событие `ops_batch` метрик (ТЗ §9). */
@@ -73,6 +79,16 @@ export class AutoSave {
         if (this.maxTimer === undefined) {
             this.maxTimer = window.setTimeout(() => this.flush(document), MAX_MS);
         }
+
+        this.onPending?.();
+    }
+
+    /**
+     * Правка мимо истории и мимо списка видов: имя работы, поднятые из буфера
+     * правки. История о них молчит, а сохранить их всё равно надо (B-208).
+     */
+    touch(document: IDocument) {
+        this.schedule(document);
     }
 
     private async flush(document: IDocument) {
@@ -100,10 +116,25 @@ export class AutoSave {
         await this.flush(document);
     }
 
-    /** Последняя попытка при уходе: вкладку закрывают, не дожидаясь таймера. */
+    /**
+     * Последняя попытка при уходе: вкладку закрывают, не дожидаясь таймера.
+     *
+     * Само по себе `document.save()` тут не работало (B-208): обычный запрос
+     * браузер на уходе со страницы обрывает, а до запроса хранилище ещё ждёт
+     * записи в IndexedDB, до которой вкладка уже не доживает. Поэтому сначала
+     * говорим хранилищу, что уходим, — оно шлёт тело с `keepalive` и буфер не
+     * ждёт. Сохраняем только когда есть что сохранять: у `keepalive` предел
+     * тела 64 КБ на всю вкладку, и лишним запросом мы вытеснили бы снимок.
+     */
     attachUnloadGuard(document: IDocument) {
+        const storage = this.app.storage as { markClosing?: () => void; markOpen?: () => void };
         window.addEventListener("pagehide", () => {
-            if (!this.stopped) void document.save();
+            if (this.stopped || !this.hasPending()) return;
+            storage.markClosing?.();
+            void document.save();
         });
+        // Уход бывает отменённым: по «Назад» браузер достаёт ту же страницу из
+        // кэша, и дальше вкладка живёт обычной жизнью.
+        window.addEventListener("pageshow", () => storage.markOpen?.());
     }
 }

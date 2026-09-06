@@ -185,7 +185,11 @@ function mountFrame(app: IApplication, autoSave: AutoSave, meta: ProjectMeta | n
         copy: id ? () => copyWork(id) : undefined,
         // Имя живёт ещё и в теле работы: переносим туда ответ сервера.
         applyTitle: (title) => {
-            if (currentDoc) currentDoc.name = title;
+            if (!currentDoc) return;
+            currentDoc.name = title;
+            // Имя меняется мимо истории: без этого тело работы оставалось со
+            // старым именем до ближайшей другой правки (B-208).
+            autoSave.touch(currentDoc);
         },
         feedback: () => feedbackWindow?.open(),
         guestSave: () => guestWindow?.open("register"),
@@ -207,6 +211,10 @@ function mountFrame(app: IApplication, autoSave: AutoSave, meta: ProjectMeta | n
             workFile: () => (currentDoc ? JSON.stringify(currentDoc.serialize()) : undefined),
         },
     });
+
+    // Правка встала в очередь — полоса перестаёт говорить «Сохранено» до ответа
+    // сервера (B-208). Обратный путь — подписка на состояние хранилища ниже.
+    autoSave.onPending = () => frame.markPending();
 
     if (typeof storage?.onStateChange === "function") {
         storage.onStateChange((state, info) => {
@@ -458,6 +466,12 @@ async function openProject(
     const startSaving = () => {
         autoSave.watch(doc);
         autoSave.attachUnloadGuard(doc);
+        // Работа открылась правками из буфера — значит, сервер о них не знает.
+        // История про них молчит (они пришли готовыми), поэтому досылку
+        // назначаем сами, иначе правки так и остались бы в браузере (B-208).
+        if ((app.storage as { restoredFromBuffer?: boolean }).restoredFromBuffer) {
+            autoSave.touch(doc);
+        }
     };
     // «Передана на правку» — серверная отметка для помощника (tz-ai.md §5):
     // ставится кнопкой «Править», живёт 30 минут, продлевается активностью вкладки.

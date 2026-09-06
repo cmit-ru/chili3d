@@ -32,6 +32,13 @@ const BUFFER_DB = "maketka-buffer";
 const BUFFER_STORE = "edits";
 
 /**
+ * Потолок тела для `keepalive`: у браузера он 64 КБ на все запросы вкладки, и
+ * делить его приходится со снимком для кабинета. Берём с запасом — тело почти
+ * целиком из чисел, где байт равен символу, но имена узлов бывают русскими.
+ */
+const KEEPALIVE_LIMIT = 48 * 1024;
+
+/**
  * Номер работы берём ИЗ АДРЕСА, а не из документа: ребёнок приходит по ссылке
  * вида `/3d/6`, доступ к которой оболочка уже проверила подзапросом. Внутренний
  * идентификатор документа Chili3D («mnz21j4…») сервер не знает — попытка
@@ -127,6 +134,27 @@ class EditBuffer {
         });
     }
 
+    /**
+     * Ключи прежней формы (`владелец:работа:вкладка`) осиротели, когда номер
+     * вкладки ушёл из ключа: прочитать их уже некому, а тела работ в них
+     * лежат целиком. Убираем свой же мусор при первом открытии работы.
+     */
+    async dropLegacy(prefix: string) {
+        const db = await this.open();
+        await new Promise<void>((resolve) => {
+            const tx = db.transaction(BUFFER_STORE, "readwrite");
+            const store = tx.objectStore(BUFFER_STORE);
+            const request = store.getAllKeys();
+            request.onsuccess = () => {
+                for (const key of request.result) {
+                    if (typeof key === "string" && key.startsWith(prefix)) store.delete(key);
+                }
+            };
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve();
+        });
+    }
+
     async drop(key: string) {
         const db = await this.open();
         await new Promise<void>((resolve) => {
@@ -160,7 +188,13 @@ export class CloudStorage implements IStorage {
     private listeners: StateListener[] = [];
     /** Владелец буфера: правки одного ребёнка не должны уйти под сессией другого. */
     private owner = "me";
-    private tabId = Math.random().toString(36).slice(2, 8);
+    /** Вкладку закрывают: последний запрос должен пережить уход со страницы. */
+    private closing = false;
+    /**
+     * Работа открылась правками из буфера, а не серверным телом: сервер о них
+     * ещё не знает, и редактор обязан их дослать (B-208).
+     */
+    restoredFromBuffer = false;
 
     constructor() {
         // Просим браузер не вытеснять буфер: иначе «работа цела» — обещание,
@@ -186,8 +220,28 @@ export class CloudStorage implements IStorage {
         for (const listener of this.listeners) listener(state, info);
     }
 
+    /**
+     * Ключ буфера — «владелец:работа», без номера вкладки. С номером буфер был
+     * односторонним: после перезагрузки вкладка получала новый номер и своих же
+     * правок не находила — обещание «правки живут в буфере даже через
+     * перезагрузку» (`frame-contract.md`) не выполнялось (B-208).
+     *
+     * Две вкладки с одной работой друг друга не путают: поднятые правки берутся
+     * только если их ревизия не старше серверной, а разошедшиеся ревизии ловит
+     * сервер (409).
+     */
     private bufferKey(id: string) {
-        return `${this.owner}:${id}:${this.tabId}`;
+        return `${this.owner}:${id}`;
+    }
+
+    /** Уход со страницы: дальше тело шлём так, чтобы браузер его не оборвал. */
+    markClosing() {
+        this.closing = true;
+    }
+
+    /** Вкладка вернулась из кэша браузера («Назад»): уход отменился. */
+    markOpen() {
+        this.closing = false;
     }
 
     async createDBIfNeeded(): Promise<void> {
@@ -213,10 +267,13 @@ export class CloudStorage implements IStorage {
         this.revisions.set(projectId, project.rev ?? 0);
         this.owner = String(project.ownerId ?? this.owner);
 
+        void this.buffer.dropLegacy(`${this.owner}:${projectId}:`).catch(() => undefined);
+
         // Если в буфере остались более свежие правки (вкладка упала, сеть падала) —
         // отдаём их, а не серверную версию: иначе работа ребёнка потеряется молча.
         const buffered = await this.buffer.get(this.bufferKey(projectId));
         if (buffered && buffered.rev >= (project.rev ?? 0) && buffered.owner === this.owner) {
+            this.restoredFromBuffer = true;
             return buffered.value;
         }
         return project.body ?? undefined;
@@ -240,15 +297,28 @@ export class CloudStorage implements IStorage {
         // хранилище само документа не знает, поэтому провайдер ставит web/index.
         const volumeMm3 = this.volumeProvider?.() ?? null;
         this.emit("saving");
-        await this.buffer.put(this.bufferKey(projectId), value, rev, this.owner);
+
+        // При уходе со страницы буфер не ждём: вкладку сносят раньше, чем
+        // IndexedDB подтвердит запись, и запрос на сервер не успевал даже
+        // начаться — правки последних секунд пропадали (B-208).
+        const вбуфер = this.buffer.put(this.bufferKey(projectId), value, rev, this.owner);
+        if (this.closing) void вбуфер.catch(() => undefined);
+        else await вбуфер;
+
+        // `keepalive` живёт дольше вкладки, но у него предел тела 64 КБ на всю
+        // вкладку. Тело крупной работы в него не помещается — такую отправляем
+        // как обычно: шанс успеть есть, а отказ браузера отнял бы и его.
+        const тело = JSON.stringify({ rev, body: value, volumeMm3 });
+        const переживёт = this.closing && тело.length <= KEEPALIVE_LIMIT;
 
         let response: Response;
         try {
             response = await fetch(`/api/projects/${projectId}/save`, {
                 method: "POST",
                 credentials: "same-origin",
+                keepalive: переживёт,
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ rev, body: value, volumeMm3 }),
+                body: тело,
             });
         } catch {
             // Сеть пропала: правки в буфере, работу можно продолжать.
@@ -272,6 +342,7 @@ export class CloudStorage implements IStorage {
 
         const saved = await response.json();
         this.revisions.set(projectId, saved.rev);
+        this.restoredFromBuffer = false;
         await this.buffer.drop(this.bufferKey(projectId));
         this.emit("saved");
         return true;
@@ -321,6 +392,9 @@ export class CloudStorage implements IStorage {
     async saveThumbnail(dataUrl: string, closing = false): Promise<void> {
         const projectId = projectIdFromLocation();
         if (!projectId) return;
+        // При уходе картинка уступает работе: общий предел `keepalive` — 64 КБ
+        // на вкладку, и снимок тяжёлой модели вытеснил бы само тело (B-208).
+        if (closing && this.closing) return;
         await fetch(`/api/projects/${projectId}/preview`, {
             method: "POST",
             credentials: "same-origin",
