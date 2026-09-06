@@ -27,7 +27,7 @@
 
 <!-- ПЕРЕЧЕНЬ-НАЧАЛО: раздел считается скриптом scripts/third-party.mjs, руками не править -->
 
-Всего компонентов: 29. Пересчитывается командой `npm run third-party`.
+Всего компонентов: 30. Пересчитывается командой `npm run third-party`.
 
 ### Компоненты вне npm
 
@@ -43,6 +43,7 @@
 | Шрифт PT Mono | 1.001W | ParaType Ltd. (2011) | SIL Open Font License 1.1 (с закреплёнными именами «PT Sans», «PT Serif», «PT Mono», «ParaType») | Контуры букв для инструмента «Надпись»; файл PTM55FT.ttf и текст лицензии лежат в packages/app/src/text/fonts, файл шрифта не изменялся | https://fonts.google.com/specimen/PT+Mono |
 | Шрифт Bad Script | 2.000 | The Bad Script Project Authors (2011) | SIL Open Font License 1.1 (без закреплённых имён) | Контуры букв для инструмента «Надпись»; файл BadScript-Regular.ttf и текст лицензии лежат в packages/app/src/text/fonts, файл шрифта не изменялся | https://fonts.google.com/specimen/Bad+Script |
 | Шрифт Ruslan Display | 1.001 | Oleg Snarsky, Denis Masharov, Vladimir Rabdu (2011) | SIL Open Font License 1.1 (с закреплёнными именами «Ruslan», «Ruslan Display») | Контуры букв для инструмента «Надпись»; файл RuslanDisplay-Regular.ttf и текст лицензии лежат в packages/app/src/text/fonts, файл шрифта не изменялся | https://fonts.google.com/specimen/Ruslan+Display |
+| Яндекс.Метрика (счётчик 112319654) | tag.js, версия сервиса на стороне правообладателя | ООО «ЯНДЕКС» | Пользовательское соглашение сервиса, безвозмездное использование | Счёт посещаемости страниц мастерской; код счётчика — в составе форка (public/metrika.js, INV-011), сам tag.js загружается браузером с mc.yandex.ru. Российский сервис, обработка в РФ | https://yandex.ru/legal/metrica_termsofuse/ |
 
 ### Пакеты npm
 
