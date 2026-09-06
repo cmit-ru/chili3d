@@ -316,6 +316,8 @@ async function addDeferredNodes(doc: IDocument, spinner?: ModelSpinner) {
  * Ждём ограниченно: не дождались — картинки просто не будет, серая плитка
  * честнее пустого кадра.
  */
+const пауза = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function дождатьсяСцены(app: IApplication, doc: IDocument, пределMs = 20_000): Promise<boolean> {
     const готово = () =>
         doc.visual.context.shapeCount > 0 &&
@@ -326,10 +328,10 @@ async function дождатьсяСцены(app: IApplication, doc: IDocument, �
         if (готово()) {
             // Размер окна доезжает до рендерера через ResizeObserver с задержкой
             // в 100 мс (`threeView.ts`) — даём ей пройти.
-            await new Promise((resolve) => setTimeout(resolve, 400));
+            await пауза(400);
             return готово();
         }
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        await пауза(250);
     }
     return false;
 }
@@ -364,13 +366,19 @@ function снимокМодели(app: IApplication): string | undefined {
     }
 }
 
+/**
+ * Открыть работу и вернуть ожидание наводки камеры.
+ *
+ * Ожидание отдаём наружу, а не съедаем здесь: накладку «Собираем модель…»
+ * снимает вызывающий, и снимать её надо тогда, когда модель уже в кадре.
+ */
 async function openProject(
     app: IApplication,
     autoSave: AutoSave,
     earlyMeta: ProjectMeta | null,
     frame: FrameBar,
     spinner?: ModelSpinner,
-) {
+): Promise<{ наводка: Promise<unknown> }> {
     const id = projectId();
     let meta: ProjectMeta | null = earlyMeta;
 
@@ -419,7 +427,7 @@ async function openProject(
 
     if (!id) {
         if (sandboxFromLocation()) await openSandbox(app, spinner);
-        return;
+        return { наводка: Promise.resolve() };
     }
 
     meta = earlyMeta ?? (await fetchMeta(id));
@@ -508,7 +516,7 @@ async function openProject(
     // Ждать обязательно: фигуру рисует wasm уже после того, как узлы приехали с
     // сервера, а наводить не по чему — значит наводить в пустоту.
     const сцена = дождатьсяСцены(app, doc);
-    void сцена.then((готово) => {
+    const наводка = сцена.then((готово) => {
         if (готово) app.activeView?.cameraController.fitContent();
     });
 
@@ -572,6 +580,10 @@ async function openProject(
             flush: () => autoSave.saveNow(doc),
         });
     }
+
+    // Ждать наводку — ограниченно: на работе, где рисовать нечего, накладка не
+    // должна висеть все двадцать секунд ожидания фигуры.
+    return { наводка: Promise.race([наводка, пауза(4_000)]) };
 }
 
 async function handleApplicaionBuilt(app: IApplication, earlyMeta: ProjectMeta | null) {
@@ -616,16 +628,24 @@ async function handleApplicaionBuilt(app: IApplication, earlyMeta: ProjectMeta |
     // расчёт геометрии идёт в том же потоке и начнётся раньше первой отрисовки.
     await nextFrame();
 
+    let наводка: Promise<unknown> = Promise.resolve();
     try {
-        await openProject(app, autoSave, earlyMeta, frame, spinner);
+        ({ наводка } = await openProject(app, autoSave, earlyMeta, frame, spinner));
     } catch (error) {
         console.warn("[project]", error);
     }
 
-    spinner.remove();
     // Редактор готов: пара к серверному `editor_open_start` — по ней считается
     // гейтовое «редактор готов p75 ≤3 с» (ТЗ §10). Раньше пары не было вовсе.
+    // Событие шлём по готовности мастерской, как и раньше: наводка камеры ждёт
+    // геометрию, и считать её в этот замер значило бы испортить сравнимость.
     sendEvent("editor_ready");
+
+    // А вот накладку держим, пока модель не окажется в кадре: иначе ученик
+    // видит пустое окно, и через секунду-другую картинка сама прыгает к модели
+    // (замечание владельца 06.09.2026 по работе 65).
+    await наводка;
+    spinner.remove();
 }
 
 // Мета грузится ДО сборки приложения: флаг «общие компьютеры класса» должен
