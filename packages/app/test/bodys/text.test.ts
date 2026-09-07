@@ -22,7 +22,7 @@ describe("TextNode", () => {
         doc = createMockDocument();
     });
 
-    test("узел называется «Надпись» на языке пользователя", () => {
+    test("узел называется «Объёмный текст» на языке пользователя", () => {
         const node = new TextNode(параметры());
         expect(node.display()).toBe("body.text");
         expect(node.name).toBe("body.text");

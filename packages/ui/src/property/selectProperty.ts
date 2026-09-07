@@ -8,6 +8,7 @@
 
 import { type Combobox, type IDocument, Localize, type Property, Transaction } from "@chili3d/core";
 import { div, option, select, span } from "@chili3d/element";
+import { fontPreviewStyle } from "../fontPreview";
 import commonStyle from "./common.module.css";
 import { PropertyBase } from "./propertyBase";
 
@@ -38,13 +39,15 @@ export class SelectProperty extends PropertyBase {
                             });
                         },
                     },
-                    ...combobox.items.map((item) =>
-                        option({
+                    ...combobox.items.map((item) => {
+                        const метка = combobox.converter?.convert(item).value ?? String(item);
+                        return option({
                             value: String(item),
-                            textContent: combobox.converter?.convert(item).value ?? String(item),
+                            textContent: метка,
                             selected: item === текущее,
-                        }),
-                    ),
+                            style: fontPreviewStyle(метка),
+                        });
+                    }),
                 ),
             ),
         );
