@@ -8,6 +8,7 @@
 
 import { type Combobox, type IDocument, Localize, type Property, Transaction } from "@chili3d/core";
 import { div, option, select, span } from "@chili3d/element";
+import { fontPreviewStyle } from "../fontPreview";
 import commonStyle from "./common.module.css";
 import { PropertyBase } from "./propertyBase";
 
@@ -44,28 +45,12 @@ export class SelectProperty extends PropertyBase {
                             value: String(item),
                             textContent: метка,
                             selected: item === текущее,
-                            // Если подпись пункта совпадает с именем уже загруженного
-                            // шрифта (fonts.ts регистрирует их в document.fonts под
-                            // собственным именем), рисуем пункт этим же шрифтом — так
-                            // ребёнок выбирает шрифт глазами, а не по названию вслепую.
-                            // На остальные списки (не про шрифты) это не влияет: их
-                            // подписи ни с одним загруженным шрифтом не совпадают.
-                            style: шрифтЗагружен(метка) ? { fontFamily: `"${метка}", sans-serif` } : {},
+                            style: fontPreviewStyle(метка),
                         });
                     }),
                 ),
             ),
         );
-    }
-}
-
-/** Есть ли в document.fonts шрифт с таким именем — без этого превью не построить. */
-function шрифтЗагружен(имя: string): boolean {
-    if (typeof document === "undefined" || !document.fonts?.check) return false;
-    try {
-        return document.fonts.check(`16px "${имя}"`);
-    } catch {
-        return false;
     }
 }
 

@@ -33,6 +33,7 @@ import {
     svg,
     UrlStringConverter,
 } from "@chili3d/element";
+import { fontPreviewStyle } from "../fontPreview";
 import style from "./commandContext.module.css";
 
 export class CommandContext extends HTMLElement implements IDisposable {
@@ -238,13 +239,22 @@ export class CommandContext extends HTMLElement implements IDisposable {
         // selection from the property value instead of the shared combobox.selectedIndex.
         const valueIndex = combobox.items.indexOf((this.command as any)[g.name]);
         const selectedIndex = valueIndex < 0 ? combobox.selectedIndex : valueIndex;
+        // Пункты вроде «Выпуклая»/«Вдавленная» приходят готовым ключом перевода — подписи
+        // для них укладывает Localize асинхронно, сверять с document.fonts тут нечего.
+        // Шрифты в комбобоксе — обычные строки (имя шрифта): подпись известна сразу, её
+        // можно свериться с уже загруженными шрифтами.
+        const шрифтовыеПункты: { элемент: HTMLOptionElement; метка: string }[] = [];
         const options = combobox.items.map((item, index) => {
-            return option({
+            const метка = I18n.isI18nKey(item)
+                ? undefined
+                : (combobox.converter?.convert(item).unchecked() ?? String(item));
+            const элемент = option({
                 selected: index === selectedIndex,
-                textContent: I18n.isI18nKey(item)
-                    ? new Localize(item)
-                    : (combobox.converter?.convert(item).unchecked() ?? String(item)),
+                textContent: метка ?? new Localize(item),
+                style: метка ? fontPreviewStyle(метка) : {},
             });
+            if (метка !== undefined) шрифтовыеПункты.push({ элемент, метка });
+            return элемент;
         });
 
         return div(
@@ -252,6 +262,16 @@ export class CommandContext extends HTMLElement implements IDisposable {
             select(
                 {
                     className: style.select,
+                    // Эта панель встаёт раньше, чем canExcute() команды успевает скачать
+                    // шрифты (см. TextCommandBase), поэтому в момент построения списка
+                    // document.fonts ещё может быть пуст. К моменту, когда ребёнок реально
+                    // открывает список (фокус — общий момент для мыши, тача и клавиатуры),
+                    // шрифты почти наверняка уже загружены — досверяем превью тогда же.
+                    onfocus: () => {
+                        for (const { элемент, метка } of шрифтовыеПункты) {
+                            Object.assign(элемент.style, fontPreviewStyle(метка));
+                        }
+                    },
                     onchange: (e) => {
                         combobox.selectedIndex = (e.target as HTMLSelectElement).selectedIndex;
                         (this.command as any)[g.name] = combobox.selectedItem;
