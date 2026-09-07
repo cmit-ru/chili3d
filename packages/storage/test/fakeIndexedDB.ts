@@ -83,9 +83,12 @@ class FakeCursor {
 class FakeObjectStore {
     name: string;
     records: Map<IDBValidKey, Value> = new Map();
+    /** In-line keys: `put(record)` without an explicit key, as `EditBuffer` does. */
+    keyPath?: string;
 
-    constructor(name: string) {
+    constructor(name: string, keyPath?: string) {
         this.name = name;
+        this.keyPath = keyPath;
     }
 
     get(key: IDBValidKey): FakeRequest<Value> {
@@ -94,11 +97,13 @@ class FakeObjectStore {
         return request;
     }
 
-    put(value: Value, key: IDBValidKey): FakeRequest<IDBValidKey> {
+    put(value: Value, key?: IDBValidKey): FakeRequest<IDBValidKey> {
         const request = new FakeRequest<IDBValidKey>();
+        const actual =
+            key ?? (this.keyPath ? (value as Record<string, IDBValidKey>)[this.keyPath] : undefined);
         queueMicrotask(() => {
-            this.records.set(key, value);
-            request.succeed(key);
+            this.records.set(actual as IDBValidKey, value);
+            request.succeed(actual as IDBValidKey);
         });
         return request;
     }
@@ -132,14 +137,23 @@ class FakeObjectStore {
 
 class FakeTransaction {
     stores: Map<string, FakeObjectStore> = new Map();
+    /** `EditBuffer` in `cloudStorage` awaits the transaction, not each request. */
+    oncomplete: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    error: unknown = null;
 
-    constructor(names: string[], db: FakeDatabase) {
-        for (const name of names) {
+    // `db.transaction()` accepts either a single store name or a list; the buffer
+    // in `cloudStorage` passes a bare string, and iterating that yielded letters.
+    constructor(names: string[] | string, db: FakeDatabase) {
+        for (const name of typeof names === "string" ? [names] : names) {
             const store = db.stores.get(name);
             if (store) {
                 this.stores.set(name, store);
             }
         }
+        // A real transaction completes once its requests do. Two microtask hops
+        // put that after the request callbacks queued synchronously by the caller.
+        queueMicrotask(() => queueMicrotask(() => this.oncomplete?.()));
     }
 
     objectStore(name: string): FakeObjectStore {
@@ -165,15 +179,15 @@ class FakeDatabase {
         this.version = version;
     }
 
-    transaction(names: string[], _mode: string): FakeTransaction {
+    transaction(names: string[] | string, _mode: string): FakeTransaction {
         return new FakeTransaction(names, this);
     }
 
-    createObjectStore(name: string): FakeObjectStore {
+    createObjectStore(name: string, options?: { keyPath?: string }): FakeObjectStore {
         if (this.stores.has(name)) {
             throw new Error(`objectStore "${name}" already exists`);
         }
-        const store = new FakeObjectStore(name);
+        const store = new FakeObjectStore(name, options?.keyPath);
         this.stores.set(name, store);
         return store;
     }

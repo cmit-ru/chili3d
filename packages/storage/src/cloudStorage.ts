@@ -12,7 +12,15 @@
 
 import type { IStorage } from "@chili3d/core";
 
-export type SaveState = "idle" | "saving" | "saved" | "offline" | "conflict" | "error";
+export type SaveState =
+    | "idle"
+    | "saving"
+    | "saved"
+    | "offline"
+    | "conflict"
+    /** Работу правит наставник: писать нельзя, но правки целы (B-262). */
+    | "locked"
+    | "error";
 
 export interface ConflictInfo {
     serverRev?: number;
@@ -329,6 +337,13 @@ export class CloudStorage implements IStorage {
         if (response.status === 409) {
             const conflict = await response.json();
             this.emit("conflict", { serverRev: conflict.serverRev, changedAt: conflict.changedAt });
+            return false;
+        }
+        if (response.status === 423) {
+            // За работой сидит наставник (B-262). Это не ошибка: правки остались в
+            // буфере и уедут, когда он выйдет из правки. Буфер не чистим — он здесь
+            // единственное, что стоит между ребёнком и потерей сделанного.
+            this.emit("locked");
             return false;
         }
         if (response.status === 401) {

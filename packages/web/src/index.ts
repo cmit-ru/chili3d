@@ -32,7 +32,8 @@ import { AutoSave } from "./autoSave";
 import { openConflictDialog } from "./conflictDialog";
 import { CoreGuard } from "./coreGuard";
 import { enableEconomyIfNeeded } from "./economy";
-import { subscribeCoreErrors } from "./errorBanner";
+import { EditLockHolder, EditLockShield, EditLockWatch, СЛОВА as ЗАМОК } from "./editLock";
+import { showNotice, subscribeCoreErrors } from "./errorBanner";
 import { Feedback, можноПрикладывать } from "./feedback";
 import { FirstHint } from "./firstHint";
 import { type CopyAnswer, FrameBar } from "./frameBar";
@@ -82,6 +83,8 @@ interface ProjectMeta {
     viewingOthers?: boolean;
     isExample?: boolean;
     ownerName?: string;
+    /** Работу прямо сейчас правит наставник: ученику её трогать нельзя (B-262). */
+    mentorEditing?: boolean;
     /** Сколько ответов от нас автор ещё не прочитал (B-141). */
     unreadReplies?: number;
 }
@@ -484,6 +487,11 @@ async function openProject(
             method: "POST",
             credentials: "same-origin",
         }).catch(() => undefined);
+    // Замок правки (B-257, B-262): пока наставник правит работу, ученик её не
+    // переписывает. Держит замок вкладка наставника — пульсом, а не одной отметкой
+    // при входе: забытая вкладка отпустит работу сама через две минуты.
+    const lock = new EditLockHolder(id);
+    let grantTimer: number | undefined;
     if (meta?.viewingOthers) {
         new ViewBanner({
             ownerName: meta.ownerName || "ученик",
@@ -493,8 +501,23 @@ async function openProject(
                 editingEnabled = true;
                 frame.startEditing();
                 startSaving();
+                autoSave.resume();
                 sendGrant();
-                window.setInterval(sendGrant, 5 * 60_000);
+                grantTimer = window.setInterval(sendGrant, 5 * 60_000);
+                lock.hold();
+            },
+            // Выход из правки (B-257). Порядок важен: сначала досылаем накопленное,
+            // и только потом гасим автосохранение — иначе правки последних секунд
+            // остались бы в браузере, а работа у ученика без них. Замок снимаем
+            // последним: пока он держится, ребёнок ещё ждёт.
+            onStopEdit: async () => {
+                await autoSave.saveNow(doc);
+                autoSave.stop();
+                editingEnabled = false;
+                frame.stopEditing();
+                window.clearInterval(grantTimer);
+                grantTimer = undefined;
+                await lock.release();
             },
             onCopy: async () => {
                 const answer = await copyWork(id);
@@ -503,6 +526,30 @@ async function openProject(
         });
     } else {
         startSaving();
+        // Своя работа: следим, не сел ли за неё наставник (B-262). Опрос идёт только
+        // при видимой вкладке — свёрнутая не жжёт ни батарею, ни базу.
+        if (meta?.user?.role === "student") {
+            const shield = new EditLockShield();
+            const setLocked = async (locked: boolean) => {
+                if (locked) {
+                    // Досылаем накопленное ДО запрета: сервер держит для этого окно
+                    // в полминуты после входа наставника (`src/editLock.js` оболочки).
+                    // Только когда есть что досылать: лишняя запись подняла бы
+                    // ревизию работы на пустом месте.
+                    if (autoSave.hasPending()) await autoSave.saveNow(doc);
+                    autoSave.stop();
+                    shield.raise();
+                    return;
+                }
+                shield.lower();
+                autoSave.resume();
+                showNotice(ЗАМОК.свободно);
+                // Наставник вышел — накопленное уезжает само, без перезагрузки страницы.
+                autoSave.touch(doc);
+            };
+            new EditLockWatch(id, Boolean(meta?.mentorEditing), (locked) => void setLocked(locked));
+            if (meta?.mentorEditing) void setLocked(true);
+        }
     }
 
     if (meta?.card?.steps?.length) {
