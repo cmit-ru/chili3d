@@ -38,16 +38,34 @@ export class SelectProperty extends PropertyBase {
                             });
                         },
                     },
-                    ...combobox.items.map((item) =>
-                        option({
+                    ...combobox.items.map((item) => {
+                        const метка = combobox.converter?.convert(item).value ?? String(item);
+                        return option({
                             value: String(item),
-                            textContent: combobox.converter?.convert(item).value ?? String(item),
+                            textContent: метка,
                             selected: item === текущее,
-                        }),
-                    ),
+                            // Если подпись пункта совпадает с именем уже загруженного
+                            // шрифта (fonts.ts регистрирует их в document.fonts под
+                            // собственным именем), рисуем пункт этим же шрифтом — так
+                            // ребёнок выбирает шрифт глазами, а не по названию вслепую.
+                            // На остальные списки (не про шрифты) это не влияет: их
+                            // подписи ни с одним загруженным шрифтом не совпадают.
+                            style: шрифтЗагружен(метка) ? { fontFamily: `"${метка}", sans-serif` } : {},
+                        });
+                    }),
                 ),
             ),
         );
+    }
+}
+
+/** Есть ли в document.fonts шрифт с таким именем — без этого превью не построить. */
+function шрифтЗагружен(имя: string): boolean {
+    if (typeof document === "undefined" || !document.fonts?.check) return false;
+    try {
+        return document.fonts.check(`16px "${имя}"`);
+    } catch {
+        return false;
     }
 }
 
