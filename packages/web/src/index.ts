@@ -84,6 +84,8 @@ interface ProjectMeta {
     ownerName?: string;
     /** Сколько ответов от нас автор ещё не прочитал (B-141). */
     unreadReplies?: number;
+    /** Пропуск служебных форм оболочки: им подписан запрос «убрать в корзину» (B-254). */
+    csrf?: string;
 }
 
 /** Открытая работа: каркас собран раньше неё и спрашивает её через эту ссылку. */
@@ -195,6 +197,9 @@ function mountFrame(app: IApplication, autoSave: AutoSave, meta: ProjectMeta | n
         guestSave: () => guestWindow?.open("register"),
         // Хук ставится ниже, после сборки мастерской, — читаем его при нажатии.
         openFiles: (files) => (app as { openWorkFiles?: (files: File[]) => void }).openWorkFiles?.(files),
+        // Пропуск для служебных форм оболочки: без него «Удалить эту модель» не
+        // подписать — страницу мастерской отдаёт статикой nginx, а не оболочка.
+        csrf: meta?.csrf,
         download: {
             workTitle: () => currentDoc?.name ?? meta?.title ?? "Работа",
             selectedCount: () => app.activeView?.document.selection.getSelectedNodeLength() ?? 0,

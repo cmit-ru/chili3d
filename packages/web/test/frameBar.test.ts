@@ -173,11 +173,71 @@ describe("Зона «работа» в полосе", () => {
             "Открыть другую работу…",
             "Создать новую работу…",
             "Скачать…",
+            "Удалить эту модель",
         ]);
 
         // Второе нажатие закрывает — меню на странице всегда одно.
         файл.click();
         expect(document.querySelector("[data-frame-menu]")).toBeNull();
+    });
+
+    // B-254: «Удалить эту модель» — единственный пункт, после которого работа
+    // закрывается, поэтому он стоит последним и за чертой. Убрать можно только свою
+    // сохранённую работу; там, где нельзя, пункт приглушён и объясняет себя.
+    test("«Удалить эту модель» стоит последним и спрашивает про корзину", async () => {
+        const запросы: string[] = [];
+        const было = globalThis.fetch;
+        globalThis.fetch = (async (url: string, init: RequestInit) => {
+            запросы.push(`${url} ${String(init.body)}`);
+            return {
+                ok: false,
+                status: 403,
+                json: async () => ({ ok: false, message: "Эту работу убирает тот, чья она." }),
+            } as unknown as Response;
+        }) as typeof globalThis.fetch;
+
+        try {
+            new FrameBar(своя({ csrf: "пропуск" }));
+            (document.querySelector("[data-frame-file]") as HTMLElement).click();
+            const пункты = [...document.querySelectorAll("[data-frame-menu] [role='menuitem']")];
+            const удалить = пункты[пункты.length - 1] as HTMLElement;
+            expect(удалить.textContent).toBe("Удалить эту модель");
+            expect(удалить.getAttribute("aria-disabled")).toBeNull();
+
+            удалить.click();
+            const окно = document.querySelector("[aria-modal='true']") as HTMLElement;
+            expect(окно.textContent).toContain("Удалить эту модель?");
+            expect(окно.textContent).toContain("Работа полежит в корзине");
+
+            const кнопки = [...окно.querySelectorAll("button")];
+            const убрать = кнопки.find((b) => b.textContent === "Убрать в корзину") as HTMLElement;
+            expect(кнопки.some((b) => b.textContent === "Отмена")).toBe(true);
+
+            убрать.click();
+            await new Promise((готово) => setTimeout(готово, 0));
+
+            // Запрос — та же ручка оболочки, что у крестика на плитке, и с пропуском.
+            expect(запросы).toEqual([`/projects/7/delete ${new URLSearchParams({ csrf: "пропуск" })}`]);
+            // Отказ сервера — его словами, и окно остаётся: страница живая.
+            expect(document.querySelector("[aria-modal='true']")).not.toBeNull();
+            expect(окно.textContent).toContain("Эту работу убирает тот, чья она.");
+        } finally {
+            globalThis.fetch = было;
+        }
+    });
+
+    test("в песочнице удалять нечего: пункт приглушён и говорит почему", () => {
+        new FrameBar(опции({}));
+        (document.querySelector("[data-frame-file]") as HTMLElement).click();
+        const пункты = [...document.querySelectorAll("[data-frame-menu] [role='menuitem']")];
+        const удалить = пункты[пункты.length - 1] as HTMLElement;
+        expect(удалить.textContent).toBe("Удалить эту модель");
+        expect(удалить.getAttribute("aria-disabled")).toBe("true");
+
+        удалить.click();
+        expect(document.querySelector("[aria-modal='true']")).toBeNull();
+        const слово = document.querySelector('[data-banner-key="menu-reason"]') as HTMLElement;
+        expect(слово.textContent).toContain("В песочнице работы ещё нет — удалять нечего");
     });
 
     // Нажатие, от которого ничего не происходит, ребёнок считает поломкой.

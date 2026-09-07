@@ -13,6 +13,7 @@
 // пакет `ui` про наш каркас не знает и знать не должен.
 
 import type { ConflictInfo, SaveState } from "@chili3d/storage";
+import { openDeleteDialog } from "./deleteDialog";
 import { type DownloadDialogOptions, openDownloadDialog, saveWorkFile } from "./downloadDialog";
 import { FRAME_FONT, showBanner, showNotice, showRememberedNotice } from "./errorBanner";
 import { зажечьТочку } from "./feedback";
@@ -62,6 +63,8 @@ export interface FrameBarOptions {
     guestSave?: () => void;
     /** Возврат работы из файла: тот же обработчик, что у перетаскивания (B-133). */
     openFiles?: (files: File[]) => void;
+    /** Пропуск служебных форм оболочки: им подписан запрос «убрать в корзину» (B-254). */
+    csrf?: string;
     download: DownloadDialogOptions;
 }
 
@@ -608,7 +611,67 @@ export class FrameBar {
             onSelect: () => openDownloadDialog(this.options.download, this.fileButton),
         });
 
+        // Последним и за чертой: это единственный пункт, после которого работа
+        // закрывается. Приглушённый объясняет себя, а не прячется (B-254).
+        items.push({
+            text: "Удалить эту модель",
+            separatorBefore: true,
+            disabled: !this.canDelete,
+            reason: this.deleteReason,
+            onSelect: () =>
+                openDeleteDialog({
+                    returnFocus: this.fileButton,
+                    remove: () => this.sendDelete(),
+                }),
+        });
+
         return items;
+    }
+
+    /** Убрать работу в корзину можно там же, где и переименовать: в своей сохранённой. */
+    private get canDelete() {
+        return this.canRename;
+    }
+
+    /** Почему работа не убирается: в песочнице её ещё нет, чужую убирает хозяин. */
+    private get deleteReason() {
+        return this.options.sandbox
+            ? "В песочнице работы ещё нет — удалять нечего"
+            : "Это чужая работа: убрать её может только тот, чья она";
+    }
+
+    /**
+     * Убрать работу в корзину — та же ручка оболочки, которой работы убирают с плитки
+     * в «Моих работах» (B-254). Ответ нужен словами: молчаливый отказ ребёнок читает
+     * как поломку, а окно ждёт от нас, что сказать.
+     *
+     * @returns слова отказа или `null`, если получилось
+     */
+    private async sendDelete(): Promise<string | null> {
+        const id = this.options.projectId;
+        const беда = "Не получилось убрать работу. Попробуй ещё раз";
+        if (!id) return беда;
+        try {
+            const response = await fetch(`/projects/${id}/delete`, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    Accept: "application/json",
+                },
+                body: new URLSearchParams({ csrf: this.options.csrf ?? "" }).toString(),
+            });
+            const answer = (await response.json().catch(() => null)) as {
+                ok?: boolean;
+                message?: string;
+            } | null;
+            if (answer?.ok) return null;
+            // Слова отказа пишет сервер: он один знает, чужая это работа или вход
+            // закончился. Своими словами их не пересказываем.
+            return answer?.message || беда;
+        } catch {
+            return беда;
+        }
     }
 
     /** «Сделать копию» и «Забрать себе» — одна ручка, разные слова для ребёнка. */
