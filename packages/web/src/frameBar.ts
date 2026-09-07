@@ -71,6 +71,7 @@ const STATE_WORDS: Record<SaveState, string> = {
     saved: "✓ Сохранено",
     offline: "! Нет интернета",
     conflict: "! Не могу сохранить — работа открыта ещё где-то",
+    locked: "◌ Сохраню, когда наставник закончит",
     error: "! Не получилось сохранить — пробую ещё раз",
 };
 
@@ -484,6 +485,16 @@ export class FrameBar {
      */
     startEditing() {
         this.options.viewing = false;
+        this.applyState();
+    }
+
+    /**
+     * Наставник вышел из режима правки (B-257): работа снова только для просмотра,
+     * и полоса говорит об этом теми же словами, что и до нажатия «Править».
+     */
+    stopEditing() {
+        this.options.viewing = true;
+        this.state = "idle";
         this.applyState();
     }
 
