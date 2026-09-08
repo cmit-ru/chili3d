@@ -4,7 +4,7 @@
 // Форк «Макетки»: экран-замок. Проверяем ровно то, что сверяет браузерная спека
 // паритета двух мастерских (`agent_docs/frame-contract.md`, раздел «Экран-замок»):
 // зацепку на корне и слово второй кнопки. Ребёнку «Выйти» не говорят нигде —
-// на общем компьютере он «Передаёт компьютер», на своём отвечает «Это не я».
+// на общем компьютере он «Выйти / Передать компьютер», на своём — «Выйти / Это не я».
 
 import { describe, expect, test } from "@rstest/core";
 import { ScreenLock } from "../src/screenLock";
@@ -31,14 +31,13 @@ describe("ScreenLock", () => {
         const lock = await поднять(true);
         const words = [...lock.querySelectorAll("button")].map((b) => b.textContent);
         expect(words).toContain("Это я, продолжить");
-        expect(words).toContain("Передать компьютер");
-        expect(words).not.toContain("Выйти");
+        expect(words).toContain("Выйти / Передать компьютер");
     });
 
     test("свой компьютер: та же кнопка спрашивает, тот ли это человек", async () => {
         const lock = await поднять(false);
         const words = [...lock.querySelectorAll("button")].map((b) => b.textContent);
-        expect(words).toContain("Это не я");
+        expect(words).toContain("Выйти / Это не я");
         expect(words).not.toContain("Передать компьютер");
     });
 

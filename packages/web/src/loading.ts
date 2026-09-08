@@ -3,7 +3,7 @@
 //
 // Форк «Макетки»: вместо бесконечной крутилки — прогресс в процентах и честный
 // экран ошибки (ТЗ §9). Ребёнок ждёт полосу, которая движется; замершую
-// крутилку он нажимает повторно и зовёт преподавателя.
+// крутилку он нажимает повторно и зовёт наставника.
 
 const STAGES = [
     { at: 0, text: "Готовим мастерскую" },
@@ -74,7 +74,7 @@ export class Loading extends HTMLElement {
 
         const hint = document.createElement("div");
         hint.style.cssText = "color:#4a625b;max-width:44ch;text-align:center;line-height:1.5";
-        hint.textContent = "Проверь интернет и попробуй ещё раз. Если не помогает — скажи преподавателю.";
+        hint.textContent = "Проверь интернет и попробуй ещё раз. Если не помогает — скажи наставнику.";
 
         const retry = document.createElement("button");
         retry.textContent = "Попробовать ещё раз";
@@ -89,7 +89,7 @@ export class Loading extends HTMLElement {
         back.textContent = "Вернуться назад";
         back.style.cssText = "color:#4a625b;font-size:14px";
 
-        // Технический текст оставляем мелким: он для преподавателя, не для ребёнка.
+        // Технический текст оставляем мелким: он для наставника, не для ребёнка.
         const detail = document.createElement("div");
         detail.style.cssText = "color:#8aa39b;font-size:12px;max-width:60ch;text-align:center";
         detail.textContent = message;

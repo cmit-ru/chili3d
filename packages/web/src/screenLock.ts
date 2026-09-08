@@ -85,7 +85,7 @@ export class ScreenLock {
         const hint = document.createElement("div");
         hint.style.cssText = "color:#b7cbc3;max-width:44ch;text-align:center;line-height:1.5";
         hint.textContent = unsaved
-            ? "Не всё сохранено — не выключай компьютер, позови преподавателя."
+            ? "Не всё сохранено — не выключай компьютер, позови наставника."
             : "Работа сохранена. Если это твой компьютер — продолжай.";
 
         const buttons = document.createElement("div");
@@ -99,10 +99,10 @@ export class ScreenLock {
         `;
         resume.onclick = () => this.unlock();
 
-        // Замок видит только ученик, а ребёнку «Выйти» не говорят ни в шапке, ни здесь:
-        // он не выходит из системы, а уступает место (контракт каркаса, раздел «Роли»).
+        // Замок видит только ученик; слова двери те же, что в шапке (контракт
+        // каркаса, раздел «Роли»): сначала «Выйти», потом — что произойдёт на деле.
         const leave = document.createElement("button");
-        leave.textContent = this.options.sharedPc ? "Передать компьютер" : "Это не я";
+        leave.textContent = this.options.sharedPc ? "Выйти / Передать компьютер" : "Выйти / Это не я";
         leave.style.cssText = `
             font: inherit; padding: 13px 22px; border-radius: 6px; cursor: pointer;
             border: 1px solid rgba(255,255,255,.35); background: none; color: #fff;

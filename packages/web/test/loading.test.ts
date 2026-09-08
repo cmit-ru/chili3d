@@ -48,8 +48,8 @@ describe("Экран загрузки мастерской", () => {
         el.showError("WebAssembly.instantiate(): out of memory");
 
         expect(el.textContent).toContain("Не получилось загрузить мастерскую");
-        expect(el.textContent).toContain("скажи преподавателю");
-        // Технический текст оставляем — он для преподавателя.
+        expect(el.textContent).toContain("скажи наставнику");
+        // Технический текст оставляем — он для наставника.
         expect(el.textContent).toContain("out of memory");
 
         // Экран ошибки не знает роли: мастерская не загрузилась, данных работы нет.

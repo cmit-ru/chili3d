@@ -25,7 +25,7 @@ export interface BannerAction {
 export interface BannerOptions {
     text: string;
     tone?: BannerTone;
-    /** Мелкая строка для взрослого: «покажи преподавателю: работа 7, ошибка 500». */
+    /** Мелкая строка для взрослого: «покажи наставнику: работа 7, ошибка 500». */
     hint?: string;
     actions?: BannerAction[];
     /** Нейтральное гаснет само; беда висит, пока её не закроют. */
@@ -215,7 +215,7 @@ export function showNotice(text: string, actions?: BannerAction[]): Banner {
  *
  * Тексты ядра английские и техничные («BRep_API: command not done»): ребёнку
  * показываем человеческие слова, а машинный текст оставляем мелкой строкой —
- * по нему преподаватель или мы разберёмся, что случилось.
+ * по нему наставник или мы разберёмся, что случилось.
  */
 export function subscribeCoreErrors(pubsub: {
     removeAll(event: "displayError"): void;
