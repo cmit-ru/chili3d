@@ -50,6 +50,7 @@ import { sendEvent } from "./track";
 import { отметитьКоманду } from "./trail";
 import { ViewBanner } from "./viewBanner";
 import { ViewMemory, применитьРакурс, ракурсКамеры } from "./viewMemory";
+import { можноГолосом } from "./voice";
 import { cachedSceneVolumeMm3 } from "./volume";
 
 const loading = new Loading();
@@ -440,6 +441,9 @@ async function openProject(
         },
         // Файлы — только взрослым (B-137 Ф2); роль — из ответа оболочки, сервер её перепроверит.
         attach: () => можноПрикладывать(meta?.user?.role),
+        // Голос — любому вошедшему, включая ученика (B-290, ADR 2026-09-09-0415): беду
+        // проще рассказать, чем набрать, и ребёнка это касается сильнее всех.
+        voice: () => можноГолосом(meta?.user?.role),
         // Точка зовёт, а прочитать ответ негде: окно показывает, куда идти (B-141).
         unread: () => непрочитано > 0,
         onRead: () => {

@@ -16,11 +16,14 @@
 // Контракт оболочки — cad-app `src/routes/feedback.js`:
 //   POST /api/feedback { editor, kind, message, projectId, context, shot } → { ok, id } | 429 { message }
 //   POST /api/feedback/<id>/files — файл сырым телом, имя в X-File-Name (только взрослым, B-137 Ф2)
+//   POST /api/feedback/<id>/voice — запись сырым телом, длительность в X-Voice-Seconds
+//     (всем вошедшим, включая учеников — B-290, ТЗ обращений §7.1)
 
 import { FRAME_FONT } from "./errorBanner";
 import { НЕ_СНИМАТЬ } from "./pageShot";
 import { загрузкаМс, кадрМс } from "./speed";
 import { лентаДействий } from "./trail";
+import { type ЗаписьГолоса, записьГолоса, приложитьЗапись, умеемЗаписывать } from "./voice";
 
 const ВИДЫ: [string, string][] = [
     ["broken", "Что-то сломалось"],
@@ -190,6 +193,8 @@ export interface FeedbackOptions {
     shot?: () => Promise<string | null>;
     /** Можно ли приложить файлы: только взрослым (ТЗ обращений §7). Без него поля нет. */
     attach?: () => boolean;
+    /** Можно ли рассказать голосом: любому вошедшему, включая ученика (§7.1). */
+    voice?: () => boolean;
     /** Есть ли непрочитанный ответ от нас: тогда окно говорит, где его прочитать (B-141). */
     unread?: () => boolean;
     /** Человек пошёл читать ответ — точке больше нечего звать. */
@@ -224,7 +229,14 @@ export class Feedback {
         const card = document.createElement("div");
         card.style.cssText = CARD;
         root.appendChild(card);
-        const close = () => root.remove();
+        // Запись голоса собирается ниже, но `close` о ней знает уже здесь: закрыли
+        // окно посреди записи — микрофон отпускаем. Горящий значок записи в браузере
+        // пугает сильнее самой поломки, из-за которой человек сюда пришёл.
+        let голос: ЗаписьГолоса | null = null;
+        const close = () => {
+            голос?.отпустить();
+            root.remove();
+        };
 
         root.addEventListener("mousedown", (e) => {
             if (e.target === root) close();
@@ -364,7 +376,14 @@ export class Feedback {
 
         card.append(title, lede);
         if (ответ) card.append(ответ);
-        card.append(tabs, label, check, место, превью);
+        card.append(tabs, label);
+        // Запись голоса — у всех вошедших, включая ребёнка (§7.1). Стоит сразу под
+        // полем текста: это замена клавиатуре, а не ещё одна скрепка среди вложений.
+        // `сказать` объявлена ниже — потому обёрткой, а не ссылкой.
+        голос =
+            this.options.voice?.() && умеемЗаписывать() ? записьГолоса((t) => сказать(t, Boolean(t))) : null;
+        if (голос) card.append(голос.узел);
+        card.append(check, место, превью);
         if (полеФайлов) card.append(полеФайлов);
         card.append(send, note);
         document.body.appendChild(root);
@@ -420,6 +439,10 @@ export class Feedback {
                         editor: "3d",
                         kind: вид,
                         message: текст.value,
+                        // Обещаем запись: без этого отзыв без текста и без картинки
+                        // сочтут пустым, а письмо владельцу уйдёт раньше самой
+                        // записи (§7.1).
+                        голос: Boolean(голос?.готова()),
                         projectId: Number(this.options.projectId) || null,
                         shot: галка.checked ? await снимок : null,
                         context: {
@@ -442,18 +465,28 @@ export class Feedback {
                     сказать(answer.message || "Не получилось отправить. Попробуйте ещё раз.", true);
                     return;
                 }
-                const неДошёл = выбранные.length
-                    ? await приложить(Number(answer.id) || 0, выбранные, (t) => сказать(t))
-                    : null;
+                // Запись уходит первой: если рассказано голосом, она и есть сообщение.
+                const номер = Number(answer.id) || 0;
+                const записано = голос?.готова() ?? null;
+                let неДошёл: string | null = null;
+                if (записано) {
+                    сказать("Отправляем запись…");
+                    неДошёл = await приложитьЗапись(номер, записано, голос!.секунды());
+                }
+                if (!неДошёл && выбранные.length) {
+                    неДошёл = await приложить(номер, выбранные, (t) => сказать(t));
+                }
+                голос?.отпустить();
                 const done = document.createElement("div");
                 done.style.cssText = "font-size:19px;font-weight:700";
                 done.textContent = "Спасибо!";
                 const doneText = document.createElement("div");
                 doneText.style.cssText = "opacity:.75;line-height:1.4";
-                // Текст уже принят, назад дороги нет: о файле, который не дошёл, говорим
-                // здесь и не закрываем окно сами — и показываем, где его приложить ещё раз.
+                // Текст уже принят, назад дороги нет: о вложении, которое не дошло,
+                // говорим здесь и не закрываем окно сами — и показываем, где приложить
+                // его ещё раз.
                 doneText.textContent = неДошёл
-                    ? `Сообщение получили, а файл — нет. ${неДошёл}. Приложить его можно в кабинете, в «Мои обращения».`
+                    ? `Сообщение получили, а вложение — нет. ${неДошёл}. Приложить его можно в кабинете, в «Мои обращения».`
                     : "Мы получили сообщение и посмотрим, что там.";
                 card.replaceChildren(done, doneText);
                 card.setAttribute("data-fb-done", "");
