@@ -344,8 +344,12 @@ export class Feedback {
         const превью = document.createElement("img");
         превью.alt = "Картинка экрана, которая уйдёт вместе с отзывом";
         превью.hidden = true;
+        // box-sizing: без него ширина 100 % плюс рамка давала 2 px переполнения, и у
+        // карточки вылезала горизонтальная полоса. max-height: снимок не должен отжимать
+        // «Отправить» за нижний край — целиком он всё равно уедет с отзывом.
         превью.style.cssText = `
-            width: 100%; border-radius: 6px; border: 1px solid var(--border-color, #c7d3ce);
+            width: 100%; box-sizing: border-box; max-height: 136px; object-fit: contain;
+            border-radius: 6px; border: 1px solid var(--border-color, #c7d3ce);
             background: #f8fafc;
         `;
 
@@ -358,7 +362,10 @@ export class Feedback {
             файлы.accept = РАСШИРЕНИЯ;
             файлы.setAttribute("data-fb-files", "");
             полеФайлов = document.createElement("label");
-            полеФайлов.style.cssText = "display:grid;gap:5px";
+            // min-width: 0 — у поля файлов минимальная ширина больше окна, и без этого
+            // оно раздвигало карточку в горизонтальную полосу.
+            полеФайлов.style.cssText = "display:grid;gap:5px;min-width:0";
+            файлы.style.cssText = "max-width:100%";
             const подпись = document.createElement("span");
             подпись.textContent = "Приложить файлы — до трёх, каждый до 5 МБ: картинка, PDF или текст";
             полеФайлов.append(подпись, файлы);
@@ -376,13 +383,17 @@ export class Feedback {
 
         card.append(title, lede);
         if (ответ) card.append(ответ);
-        card.append(tabs, label);
-        // Запись голоса — у всех вошедших, включая ребёнка (§7.1). Стоит сразу под
-        // полем текста: это замена клавиатуре, а не ещё одна скрепка среди вложений.
-        // `сказать` объявлена ниже — потому обёрткой, а не ссылкой.
+        card.append(tabs);
+        // Запись голоса — у всех вошедших, включая ребёнка (§7.1). Она в одной связке
+        // с полем текста, вплотную: это два способа рассказать одно и то же, а не поле
+        // и ещё одна скрепка среди вложений. `сказать` объявлена ниже — потому обёрткой.
         голос =
             this.options.voice?.() && умеемЗаписывать() ? записьГолоса((t) => сказать(t, Boolean(t))) : null;
-        if (голос) card.append(голос.узел);
+        const рассказ = document.createElement("div");
+        рассказ.style.cssText = "display:grid;gap:6px;min-width:0";
+        рассказ.append(label);
+        if (голос) рассказ.append(голос.узел);
+        card.append(рассказ);
         card.append(check, место, превью);
         if (полеФайлов) card.append(полеФайлов);
         card.append(send, note);
@@ -471,7 +482,7 @@ export class Feedback {
                 let неДошёл: string | null = null;
                 if (записано) {
                     сказать("Отправляем запись…");
-                    неДошёл = await приложитьЗапись(номер, записано, голос!.секунды());
+                    неДошёл = await приложитьЗапись(номер, записано, голос?.секунды() ?? 0);
                 }
                 if (!неДошёл && выбранные.length) {
                     неДошёл = await приложить(номер, выбранные, (t) => сказать(t));

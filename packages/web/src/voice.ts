@@ -63,6 +63,12 @@ const ГЛАВНАЯ = `
     border-radius: 6px; border: 1px solid #1c6dbd; background: #1c6dbd; color: #fff;
 `;
 const МЕЛКАЯ = `${КНОПКА} font-size: 13px; padding: 4px 9px;`;
+/* Подложка под «идёт запись» и «записано»: у состояния должны быть видимые границы.
+   Полупрозрачный серый читается и на светлой теме редактора, и на тёмной. */
+const ПОДЛОЖКА = `
+    box-sizing: border-box; padding: 8px 10px; border-radius: 8px;
+    border: 1px solid var(--border-color, #c7d3ce); background: rgba(127, 127, 127, .08);
+`;
 
 export interface ЗаписьГолоса {
     /** Узел с кнопкой и всеми состояниями записи: класть в карточку окна. */
@@ -81,7 +87,9 @@ export interface ЗаписьГолоса {
  */
 export function записьГолоса(сказать: (текст: string) => void): ЗаписьГолоса {
     const узел = document.createElement("div");
-    узел.style.cssText = "display:grid;gap:6px;justify-items:start";
+    // Кнопка во всю ширину поля: запись — второй способ рассказать, а не значок,
+    // прилепленный к углу поля текста.
+    узел.style.cssText = "display:grid;gap:6px";
 
     const кнопка = document.createElement("button");
     кнопка.type = "button";
@@ -91,11 +99,11 @@ export function записьГолоса(сказать: (текст: string) =>
 
     const живая = document.createElement("div");
     живая.hidden = true;
-    живая.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap";
+    живая.style.cssText = `display:flex;align-items:center;gap:8px;flex-wrap:wrap;${ПОДЛОЖКА}`;
 
     const готовая = document.createElement("div");
     готовая.hidden = true;
-    готовая.style.cssText = "display:grid;gap:5px;width:100%";
+    готовая.style.cssText = `display:grid;gap:5px;width:100%;${ПОДЛОЖКА}`;
 
     узел.append(кнопка, живая, готовая);
 
