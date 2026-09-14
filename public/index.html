@@ -14,6 +14,19 @@
         <script src="/3d/metrika.js" defer></script>
     </head>
     <body>
+        <!-- Заглушка узкого экрана (B-275, ТЗ §9). Стоит в самой странице, а не рисуется
+             бандлом: иначе ребёнок сперва ждал бы загрузку редактора и ядра геометрии и
+             только потом узнавал, что открывать их не стоило. Правило показа — в index.css,
+             тот же порог читает и скрипт. -->
+        <div class="narrow">
+            <h1>Модели собирают на компьютере</h1>
+            <p>С телефона фигуру не повернуть: тут нужен большой экран и мышка. Открой эту
+            страницу на компьютере или на планшете — адрес тот же.</p>
+            <p class="narrow-acts">
+                <a class="narrow-home" href="/">На главную</a>
+                <button type="button" id="narrow-go" class="narrow-go">Всё равно открыть</button>
+            </p>
+        </div>
         <noscript>Для работы мастерской нужен включённый JavaScript.</noscript>
         <noscript><div><img src="https://mc.yandex.ru/watch/112319654" style="position:absolute;left:-9999px" alt="" /></div></noscript>
     </body>

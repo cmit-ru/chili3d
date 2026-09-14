@@ -54,7 +54,6 @@ import { можноГолосом } from "./voice";
 import { cachedSceneVolumeMm3 } from "./volume";
 
 const loading = new Loading();
-document.body.appendChild(loading);
 
 // Номер работы читаем тем же способом, что и хранилище: после удаления
 // страницы-обёртки адрес работы — это путь `/3d/6`, а не `?project=6`.
@@ -764,18 +763,41 @@ const earlyMeta: Promise<ProjectMeta | null> = (async () => {
     return meta;
 })();
 
-// prettier-ignore
-earlyMeta
-    .then((meta) =>
-        new AppBuilder()
-            .useCloudStorage()
-            .useWasmOcc()
-            .useThree()
-            .useUI()
-            .build()
-            .then((app) => handleApplicaionBuilt(app, meta)),
-    )
-    .catch((err) => {
-        // Экран «не загрузилось» с понятным текстом вместо системного alert
-        loading.showError(err?.message ?? String(err));
-    });
+function запустить() {
+    document.body.appendChild(loading);
+    // prettier-ignore
+    earlyMeta
+        .then((meta) =>
+            new AppBuilder()
+                .useCloudStorage()
+                .useWasmOcc()
+                .useThree()
+                .useUI()
+                .build()
+                .then((app) => handleApplicaionBuilt(app, meta)),
+        )
+        .catch((err) => {
+            // Экран «не загрузилось» с понятным текстом вместо системного alert
+            loading.showError(err?.message ?? String(err));
+        });
+}
+
+// Телефон: редактор не поднимаем вовсе (B-275). Заглушку показывает правило страницы,
+// она видна ещё до того, как разобран бандл; здесь остаётся дверь «всё равно открыть» —
+// на случай, если с размером экрана мы не угадали. Порог тот же, что в index.css и что
+// в мастерской схем: менять — в трёх местах разом.
+const телефон = () =>
+    window.matchMedia("(max-width: 700px), (max-height: 480px) and (pointer: coarse)").matches;
+
+if (телефон()) {
+    document.getElementById("narrow-go")?.addEventListener(
+        "click",
+        () => {
+            document.documentElement.classList.add("narrow-off");
+            запустить();
+        },
+        { once: true },
+    );
+} else {
+    запустить();
+}

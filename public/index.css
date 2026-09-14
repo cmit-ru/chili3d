@@ -11,3 +11,76 @@ body {
     color: var(--foreground-color);
     background-color: var(--background-color);
 }
+
+/* Заглушка узкого экрана (B-275, ТЗ §9). Мастерская моделей на телефоне не работает:
+   фигуру крутят мышью, а панель инструментов шире самого экрана. Раньше страница всё
+   равно открывалась — и ребёнок сперва ждал ядро геометрии, а потом упирался в
+   непригодный интерфейс. Порог тот же, что в мастерской схем (`web/circuits/styles.css`
+   оболочки): телефон и телефон, повёрнутый набок. Цвета заданы явно, не темой редактора:
+   заглушка живёт до того, как тема вообще применена. */
+.narrow {
+    display: none;
+}
+
+@media (max-width: 700px), (max-height: 480px) and (pointer: coarse) {
+    /* Страница редактора не прокручивается (`overflow: hidden` выше) — заглушке
+       прокрутка нужна: на маленьком экране с крупным шрифтом она не влезает.
+       Признак «ребёнок настоял» стоит на `html`: `overflow: hidden` у корня
+       обрезал бы страницу, сколько бы тело ни прокручивалось. */
+    html:not(.narrow-off),
+    html:not(.narrow-off) body {
+        overflow: auto;
+        height: auto;
+        background: #fff;
+    }
+
+    /* Ребёнок настоял — поднимаем редактор как есть. */
+    html.narrow-off .narrow {
+        display: none;
+    }
+
+    .narrow {
+        display: block;
+        max-width: 32rem;
+        margin: 0 auto;
+        padding: 2rem 1.2rem;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: #12211c;
+    }
+
+    .narrow h1 {
+        font-size: 1.3rem;
+        margin: 0 0 0.6rem;
+    }
+
+    .narrow p {
+        margin: 0 0 1rem;
+        line-height: 1.5;
+    }
+
+    .narrow-acts {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    /* Обе цели нажатия — не мельче 44 px: палец, а не мышь. */
+    .narrow-home {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        color: #0e7a5f;
+    }
+
+    .narrow-go {
+        font: inherit;
+        min-height: 44px;
+        padding: 0.4rem 0.9rem;
+        background: none;
+        border: 1px solid #c7d3ce;
+        border-radius: 8px;
+        color: #4a625b;
+        cursor: pointer;
+    }
+}
