@@ -9,20 +9,28 @@
 
 .left {
     flex: 1;
+    /* Без этого подсказка не даёт себя сжать и выдавливает привязки за правый край,
+       а `overflow: hidden` окна их просто срезает (B-276). */
+    min-width: 0;
 
     .tip {
         font-size: 12px;
         margin: 4px 8px;
         color: var(--statusbar-foreground-color);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 }
 
 .right {
     flex: 0 1 auto;
+    /* Восемь привязок с русскими подписями шире портретного планшета. Пусть едут
+       вбок внутри полосы — обрезанная наполовину галочка хуже, чем прокрутка. */
+    overflow-x: auto;
+    scrollbar-width: none;
 }
 
-@media (max-width: 680px) {
-    .right {
-        display: none;
-    }
-}
+/* Правила `@media (max-width: 680px) { .right { display: none } }` здесь больше
+   нет (B-276): выбор привязок пропадал ровно там, где рисуют пальцем и попасть
+   в нужную точку труднее всего. */

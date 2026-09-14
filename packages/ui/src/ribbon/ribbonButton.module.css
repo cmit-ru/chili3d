@@ -6,7 +6,9 @@
     margin: 0 4px;
     justify-content: flex-start;
     border-radius: 4px;
-    min-width: 42px;
+    /* 44, а не 42: мишень команды не меньше 44 px по обеим сторонам (B-276).
+       Высота у кнопки уже 48. */
+    min-width: 44px;
     max-width: 100px;
     width: auto;
     min-height: 48px;
