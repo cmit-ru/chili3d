@@ -52,7 +52,9 @@ export class Editor extends HTMLElement {
             new PropertyView({ className: style.sidebarItem }),
             div({
                 className: style.sidebarResizer,
-                onmousedown: (e: MouseEvent) => this._startSidebarResize(e),
+                // Указатель, а не мышь (B-276): на планшете панель тянут пальцем,
+                // а `mousedown` палец не порождает.
+                onpointerdown: (e: PointerEvent) => this._startSidebarResize(e),
             }),
         );
         this.append(
@@ -66,12 +68,23 @@ export class Editor extends HTMLElement {
         this.app.mainWindow?.appendChild(this);
     }
 
-    private _startSidebarResize(e: MouseEvent) {
+    // Захват указателя вместо слушателей на окне (B-276). Рукоятка — полоска в 6 px:
+    // палец съезжает с неё на первом же движении, и тогда `pointermove` достаётся
+    // сцене под пальцем — панель бросает тянуться, а модель начинает крутиться.
+    // `setPointerCapture` адресует весь ход этого указателя самой рукоятке, куда бы
+    // он ни ушёл, поэтому и слушатели висят на ней. Мыши это ничего не меняет:
+    // указатель мыши — тот же указатель, кнопка держит захват до отпускания.
+    private _startSidebarResize(e: PointerEvent) {
+        // Второй палец во время растягивания игнорируем: ширину считает один
+        // указатель, два разом дёргали бы панель между собой.
+        if (this._isResizingSidebar) return;
+        const resizer = e.currentTarget as HTMLElement;
         e.preventDefault();
         this._isResizingSidebar = true;
+        resizer.setPointerCapture(e.pointerId);
         if (this.app.mainWindow) this.app.mainWindow.style.cursor = "ew-resize";
-        const onMouseMove = (ev: MouseEvent) => {
-            if (!this._isResizingSidebar) return;
+        const onPointerMove = (ev: PointerEvent) => {
+            if (!this._isResizingSidebar || ev.pointerId !== e.pointerId) return;
             if (!this._sidebarEl) return;
             const sidebarRect = this._sidebarEl.getBoundingClientRect();
             let newWidth = ev.clientX - sidebarRect.left;
@@ -81,14 +94,23 @@ export class Editor extends HTMLElement {
             this._sidebarWidth = newWidth;
             this._sidebarEl.style.width = `${newWidth}px`;
         };
-        const onMouseUp = () => {
+        const onPointerUp = (ev: PointerEvent) => {
+            if (ev.pointerId !== e.pointerId) return;
             this._isResizingSidebar = false;
             if (this.app.mainWindow) this.app.mainWindow.style.cursor = "";
-            this.app.mainWindow?.removeEventListener("mousemove", onMouseMove);
-            this.app.mainWindow?.removeEventListener("mouseup", onMouseUp);
+            // Отпущенного пальца среди указателей уже нет, и слепой
+            // `releasePointerCapture` бросил бы NotFoundError — спрашиваем.
+            if (resizer.hasPointerCapture(ev.pointerId)) resizer.releasePointerCapture(ev.pointerId);
+            resizer.removeEventListener("pointermove", onPointerMove);
+            resizer.removeEventListener("pointerup", onPointerUp);
+            resizer.removeEventListener("pointercancel", onPointerUp);
         };
-        this.app.mainWindow?.addEventListener("mousemove", onMouseMove);
-        this.app.mainWindow?.addEventListener("mouseup", onMouseUp);
+        resizer.addEventListener("pointermove", onPointerMove);
+        resizer.addEventListener("pointerup", onPointerUp);
+        // Системный жест (шторка, переключение приложений) обрывает указатель
+        // `pointercancel`, и `pointerup` уже не придёт — без этого панель осталась
+        // бы прилипшей к пальцу.
+        resizer.addEventListener("pointercancel", onPointerUp);
     }
 
     connectedCallback(): void {

@@ -206,6 +206,8 @@ export default {
         "home.welcome": "Welcome to chili3d",
         "home.welcome.subtitle": "Design and model in 3D, right in your browser.",
         "items.header": "Items",
+        "items.move.down": "Down",
+        "items.move.up": "Up",
         "items.tool.delete": "Delete",
         "items.tool.expandAll": "Expand All",
         "items.tool.newFolder": "New Folder",

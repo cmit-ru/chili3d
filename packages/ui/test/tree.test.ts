@@ -20,6 +20,8 @@ rs.mock("../src/project/tree/treeItem.module.css", () => ({
     name: "ti-name",
     icon: "ti-icon",
     "parent-hidden": "ti-parent-hidden",
+    moveButton: "ti-move",
+    moveHidden: "ti-move-hidden",
 }));
 
 rs.mock("../src/project/tree/treeItemGroup.module.css", () => ({
@@ -56,6 +58,7 @@ class MockNode {
     parentVisible: boolean | undefined = true;
     parent: MockNode | undefined;
     firstChild: MockNode | undefined;
+    previousSibling: MockNode | undefined;
     nextSibling: MockNode | undefined;
 
     constructor(readonly name: string) {}
@@ -68,7 +71,33 @@ class MockNode {
         this.handlers.delete(handler);
     }
 
-    move = rs.fn((_child: unknown, _newParent: unknown, _previousSibling?: unknown) => {});
+    // Перестановка настоящая, а не заглушка: кнопки «Выше»/«Ниже» проверяются по
+    // получившемуся порядку, а не по факту вызова. Связывание то же, что в
+    // `FolderNode.move` — третий аргумент задаёт соседа, ЗА которым узел встанет,
+    // а `undefined` ставит узел первым.
+    move = rs.fn((child: MockNode, newParent: MockNode, previousSibling?: MockNode) => {
+        unlinkFromSiblings(child);
+        child.parent = newParent;
+        if (previousSibling) {
+            child.previousSibling = previousSibling;
+            child.nextSibling = previousSibling.nextSibling;
+            if (previousSibling.nextSibling) previousSibling.nextSibling.previousSibling = child;
+            previousSibling.nextSibling = child;
+        } else {
+            child.previousSibling = undefined;
+            child.nextSibling = newParent.firstChild;
+            if (newParent.firstChild) newParent.firstChild.previousSibling = child;
+            newParent.firstChild = child;
+        }
+    });
+}
+
+function unlinkFromSiblings(node: MockNode) {
+    if (node.previousSibling) node.previousSibling.nextSibling = node.nextSibling;
+    else if (node.parent?.firstChild === node) node.parent.firstChild = node.nextSibling;
+    if (node.nextSibling) node.nextSibling.previousSibling = node.previousSibling;
+    node.previousSibling = undefined;
+    node.nextSibling = undefined;
 }
 
 // tree.ts checks `node instanceof VisualNode` against the mocked class; link the
@@ -150,6 +179,7 @@ function createFixture(): Fixture {
     model1.parent = groupA;
     model2.parent = groupA;
     model1.nextSibling = model2;
+    model2.previousSibling = model1;
     root.firstChild = groupA;
     groupA.firstChild = model1;
 
@@ -324,6 +354,111 @@ describe("Tree", () => {
 
             expect(fixture.root.move).not.toHaveBeenCalled();
             expect(fixture.groupA.move).not.toHaveBeenCalled();
+        });
+    });
+
+    // Пальцем порядок в дереве иначе не поменять: перенос мышью держится на
+    // HTML5 drag and drop, а он для касания спецификацией не определён (B-276).
+    describe("перестановка кнопками «Выше» и «Ниже»", () => {
+        const childNames = (parent: MockNode) => {
+            const names: string[] = [];
+            for (let child = parent.firstChild; child; child = child.nextSibling) {
+                names.push(child.name);
+            }
+            return names;
+        };
+
+        const itemOf = (node: MockNode) => fixture.tree.treeItem(node as unknown as INode)!;
+
+        test("«Ниже» ставит деталь за её соседом снизу", () => {
+            fixture = createFixture();
+
+            itemOf(fixture.model1).moveDownButton.click();
+
+            expect(fixture.groupA.move).toHaveBeenCalledWith(fixture.model1, fixture.groupA, fixture.model2);
+            expect(childNames(fixture.groupA)).toEqual(["model2", "model1"]);
+        });
+
+        test("«Выше» ставит деталь перед её соседом сверху", () => {
+            fixture = createFixture();
+
+            itemOf(fixture.model2).moveUpButton.click();
+
+            // Третий аргумент — сосед, ЗА которым узел встанет; у первой строки
+            // его нет, поэтому деталь становится первой.
+            expect(fixture.groupA.move).toHaveBeenCalledWith(fixture.model2, fixture.groupA, undefined);
+            expect(childNames(fixture.groupA)).toEqual(["model2", "model1"]);
+        });
+
+        test("три детали: «Ниже» двигает деталь на один шаг, а не в конец", () => {
+            fixture = createFixture();
+            const model3 = new MockNode("model3");
+            model3.parent = fixture.groupA;
+            model3.previousSibling = fixture.model2;
+            fixture.model2.nextSibling = model3;
+            fixture.doc.emitNodeChanged([
+                {
+                    node: model3,
+                    newParent: fixture.groupA,
+                    newPrevious: fixture.model2,
+                } as unknown as NodeRecord,
+            ]);
+
+            itemOf(fixture.model1).moveDownButton.click();
+
+            expect(childNames(fixture.groupA)).toEqual(["model2", "model1", "model3"]);
+        });
+
+        test("у первой детали «Выше» не нажимается и порядок не трогает", () => {
+            fixture = createFixture();
+            const model1El = itemOf(fixture.model1);
+
+            expect(model1El.moveUpButton.disabled).toBe(true);
+            expect(model1El.moveUpButton.classList.contains("ti-move-hidden")).toBe(true);
+
+            model1El.moveUpButton.click();
+
+            expect(fixture.groupA.move).not.toHaveBeenCalled();
+            expect(childNames(fixture.groupA)).toEqual(["model1", "model2"]);
+        });
+
+        test("у последней детали «Ниже» не нажимается, «Выше» остаётся живой", () => {
+            fixture = createFixture();
+            const model2El = itemOf(fixture.model2);
+
+            expect(model2El.moveDownButton.disabled).toBe(true);
+            expect(model2El.moveUpButton.disabled).toBe(false);
+            expect(model2El.moveUpButton.classList.contains("ti-move-hidden")).toBe(false);
+        });
+
+        test("у корня дерева кнопок нет: двигать его некуда", () => {
+            fixture = createFixture();
+            const rootEl = itemOf(fixture.root);
+
+            expect(rootEl.moveUpButton.disabled).toBe(true);
+            expect(rootEl.moveDownButton.disabled).toBe(true);
+        });
+
+        test("после перестановки кнопки пересчитываются у обеих деталей", () => {
+            fixture = createFixture();
+            const model1El = itemOf(fixture.model1);
+            const model2El = itemOf(fixture.model2);
+
+            model1El.moveDownButton.click();
+            fixture.doc.emitNodeChanged([
+                {
+                    node: fixture.model1,
+                    newParent: fixture.groupA,
+                    newPrevious: fixture.model2,
+                } as unknown as NodeRecord,
+            ]);
+
+            // model1 стала последней, model2 — первой: нажатий впустую остаться
+            // не должно ни у одной из них.
+            expect(model1El.moveDownButton.disabled).toBe(true);
+            expect(model1El.moveUpButton.disabled).toBe(false);
+            expect(model2El.moveUpButton.disabled).toBe(true);
+            expect(model2El.moveDownButton.disabled).toBe(false);
         });
     });
 });

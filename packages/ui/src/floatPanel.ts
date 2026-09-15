@@ -15,6 +15,9 @@ export class FloatPanel extends HTMLElement {
     private resizeHandle: HTMLElement;
     private isDragging = false;
     private isResizing = false;
+    // Указатель, который сейчас ведёт окно: и заголовок, и уголок правят одни и те же
+    // поля dragStart*, поэтому второй палец, пока идёт первый, мы не слушаем (B-276).
+    private activePointerId?: number;
     private dragStartX = 0;
     private dragStartY = 0;
     private initialLeft = 0;
@@ -38,8 +41,9 @@ export class FloatPanel extends HTMLElement {
         const content = div({ className: style.content }, options.content);
         this.append(this.header, content, this.resizeHandle);
 
-        this.header.addEventListener("mousedown", this.onHeaderMouseDown);
-        this.resizeHandle.addEventListener("mousedown", this.onResizeHandleMouseDown);
+        // Указатель, а не мышь (B-276): на планшете окно двигают и растягивают пальцем.
+        this.header.addEventListener("pointerdown", this.onHeaderPointerDown);
+        this.resizeHandle.addEventListener("pointerdown", this.onResizeHandlePointerDown);
 
         // Intercept keyboard events to prevent bubbling to window and triggering global shortcuts
         this.tabIndex = -1;
@@ -69,11 +73,21 @@ export class FloatPanel extends HTMLElement {
         );
     }
 
-    private onHeaderMouseDown = (e: MouseEvent): void => {
-        if ((e.target as HTMLElement).classList.contains(style.closeButton)) {
+    // Захват указателя вместо слушателей на документе (B-276). Палец ведёт окно как
+    // попало: уходит с заголовка на сцену, а то и за край окна. `setPointerCapture`
+    // отдаёт весь ход этого указателя заголовку, куда бы палец ни ушёл, — потому и
+    // слушатели ниже висят на заголовке. Мыши это не меняет ничего: захват держится,
+    // пока кнопка нажата, и отпускается вместе с ней.
+    private onHeaderPointerDown = (e: PointerEvent): void => {
+        // `closest`, а не `classList` у самой мишени: пальцем попадают по значку внутри
+        // крестика, и тогда с захватом клик уехал бы на заголовок — окно перестало бы
+        // закрываться.
+        if ((e.target as Element).closest?.(`.${style.closeButton}`)) {
             return;
         }
+        if (this.activePointerId !== undefined) return;
 
+        this.activePointerId = e.pointerId;
         this.isDragging = true;
         this.dragStartX = e.clientX;
         this.dragStartY = e.clientY;
@@ -82,13 +96,18 @@ export class FloatPanel extends HTMLElement {
         this.initialLeft = rect.left;
         this.initialTop = rect.top;
 
-        document.addEventListener("mousemove", this.onDrag);
-        document.addEventListener("mouseup", this.onDragEnd);
+        this.header.setPointerCapture(e.pointerId);
+        this.header.addEventListener("pointermove", this.onDrag);
+        this.header.addEventListener("pointerup", this.onDragEnd);
+        // Системный жест (шторка, переключение приложений) обрывает указатель
+        // `pointercancel`, `pointerup` при этом не приходит — без этого окно осталось
+        // бы висеть на пальце, которого уже нет.
+        this.header.addEventListener("pointercancel", this.onDragEnd);
         e.preventDefault();
     };
 
-    private onDrag = (e: MouseEvent): void => {
-        if (!this.isDragging) return;
+    private onDrag = (e: PointerEvent): void => {
+        if (!this.isDragging || e.pointerId !== this.activePointerId) return;
 
         const dx = e.clientX - this.dragStartX;
         const dy = e.clientY - this.dragStartY;
@@ -96,13 +115,25 @@ export class FloatPanel extends HTMLElement {
         this.style.top = `${this.initialTop + dy}px`;
     };
 
-    private onDragEnd = (): void => {
+    private onDragEnd = (e: PointerEvent): void => {
+        if (e.pointerId !== this.activePointerId) return;
+
         this.isDragging = false;
-        document.removeEventListener("mousemove", this.onDrag);
-        document.removeEventListener("mouseup", this.onDragEnd);
+        this.activePointerId = undefined;
+        // Отпущенного пальца среди указателей уже нет, и слепой
+        // `releasePointerCapture` бросил бы NotFoundError — спрашиваем.
+        if (this.header.hasPointerCapture(e.pointerId)) this.header.releasePointerCapture(e.pointerId);
+        this.header.removeEventListener("pointermove", this.onDrag);
+        this.header.removeEventListener("pointerup", this.onDragEnd);
+        this.header.removeEventListener("pointercancel", this.onDragEnd);
     };
 
-    private onResizeHandleMouseDown = (e: MouseEvent): void => {
+    // Тот же захват, что и у заголовка (B-276), и он тут даже нужнее: уголок — квадрат
+    // 16 px, палец сходит с него сразу.
+    private onResizeHandlePointerDown = (e: PointerEvent): void => {
+        if (this.activePointerId !== undefined) return;
+
+        this.activePointerId = e.pointerId;
         this.isResizing = true;
         this.dragStartX = e.clientX;
         this.dragStartY = e.clientY;
@@ -111,14 +142,16 @@ export class FloatPanel extends HTMLElement {
         this.initialWidth = rect.width;
         this.initialHeight = rect.height;
 
-        document.addEventListener("mousemove", this.onResize);
-        document.addEventListener("mouseup", this.onResizeEnd);
+        this.resizeHandle.setPointerCapture(e.pointerId);
+        this.resizeHandle.addEventListener("pointermove", this.onResize);
+        this.resizeHandle.addEventListener("pointerup", this.onResizeEnd);
+        this.resizeHandle.addEventListener("pointercancel", this.onResizeEnd);
         e.preventDefault();
         e.stopPropagation();
     };
 
-    private onResize = (e: MouseEvent): void => {
-        if (!this.isResizing) return;
+    private onResize = (e: PointerEvent): void => {
+        if (!this.isResizing || e.pointerId !== this.activePointerId) return;
 
         const dx = e.clientX - this.dragStartX;
         const dy = e.clientY - this.dragStartY;
@@ -129,10 +162,17 @@ export class FloatPanel extends HTMLElement {
         this.style.height = `${Math.max(minHeight, this.initialHeight + dy)}px`;
     };
 
-    private onResizeEnd = (): void => {
+    private onResizeEnd = (e: PointerEvent): void => {
+        if (e.pointerId !== this.activePointerId) return;
+
         this.isResizing = false;
-        document.removeEventListener("mousemove", this.onResize);
-        document.removeEventListener("mouseup", this.onResizeEnd);
+        this.activePointerId = undefined;
+        if (this.resizeHandle.hasPointerCapture(e.pointerId)) {
+            this.resizeHandle.releasePointerCapture(e.pointerId);
+        }
+        this.resizeHandle.removeEventListener("pointermove", this.onResize);
+        this.resizeHandle.removeEventListener("pointerup", this.onResizeEnd);
+        this.resizeHandle.removeEventListener("pointercancel", this.onResizeEnd);
     };
 
     private handleKeyEvent = (e: KeyboardEvent): void => {
@@ -141,12 +181,14 @@ export class FloatPanel extends HTMLElement {
 
     dispose(): void {
         this.removeEventListener("keydown", this.handleKeyEvent);
-        this.header.removeEventListener("mousedown", this.onHeaderMouseDown);
-        this.resizeHandle.removeEventListener("mousedown", this.onResizeHandleMouseDown);
-        document.removeEventListener("mousemove", this.onDrag);
-        document.removeEventListener("mouseup", this.onDragEnd);
-        document.removeEventListener("mousemove", this.onResize);
-        document.removeEventListener("mouseup", this.onResizeEnd);
+        this.header.removeEventListener("pointerdown", this.onHeaderPointerDown);
+        this.resizeHandle.removeEventListener("pointerdown", this.onResizeHandlePointerDown);
+        this.header.removeEventListener("pointermove", this.onDrag);
+        this.header.removeEventListener("pointerup", this.onDragEnd);
+        this.header.removeEventListener("pointercancel", this.onDragEnd);
+        this.resizeHandle.removeEventListener("pointermove", this.onResize);
+        this.resizeHandle.removeEventListener("pointerup", this.onResizeEnd);
+        this.resizeHandle.removeEventListener("pointercancel", this.onResizeEnd);
     }
 }
 

@@ -97,6 +97,11 @@ export class Tree extends HTMLElement {
                 parent.insertAfter(ele, pre ?? null);
             }
         });
+        // Соседи поменялись местами — «Выше» у нового первого узла и «Ниже» у
+        // нового последнего должны погаснуть сразу, иначе останется нажатие, от
+        // которого ничего не происходит (B-276). Дерево в работе ребёнка — это
+        // десятки строк, поэтому пересчитать все дешевле, чем вычислять задетых.
+        this.nodeMap.forEach((item) => item.updateMoveButtons());
     };
 
     private createAndMapParent(newParent: INode) {

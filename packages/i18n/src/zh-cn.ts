@@ -206,6 +206,8 @@ export default {
         "home.welcome": "欢迎使用 chili3d",
         "home.welcome.subtitle": "在浏览器中进行 3D 设计与建模。",
         "items.header": "项目",
+        "items.move.down": "下移",
+        "items.move.up": "上移",
         "items.tool.delete": "删除",
         "items.tool.expandAll": "展开所有",
         "items.tool.newFolder": "文件夹",

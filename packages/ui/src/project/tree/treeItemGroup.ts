@@ -23,6 +23,9 @@ export class TreeGroup extends TreeItem {
             { className: `${style.row} ${style.header}` },
             this.expanderIcon,
             this.name,
+            // Порядок тот же, что в строке детали (B-276): глазок крайний справа.
+            this.moveUpButton,
+            this.moveDownButton,
             this.visibleIcon,
         );
         super.append(div({ className: style.container }, this.header, this.items));

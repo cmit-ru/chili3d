@@ -12,6 +12,8 @@ rs.mock("../src/project/tree/treeItem.module.css", () => ({
     name: "ti-name",
     icon: "ti-icon",
     "parent-hidden": "ti-parent-hidden",
+    moveButton: "ti-move",
+    moveHidden: "ti-move-hidden",
 }));
 
 rs.mock("../src/project/tree/treeItemGroup.module.css", () => ({
@@ -76,12 +78,15 @@ describe("TreeGroup", () => {
     });
 
     describe("rendering", () => {
-        test("should render header with expander icon, name and visible icon", () => {
+        test("should render header with expander icon, name, move buttons and visible icon", () => {
             const { group } = createGroup();
             expect(group.header.className).toBe("tig-row tig-header");
             expect(group.header.children[0]).toBe(group.expanderIcon);
             expect(group.header.children[1]).toBe(group.name);
-            expect(group.header.children[2]).toBe(group.visibleIcon);
+            // Порядок тот же, что в строке детали (B-276).
+            expect(group.header.children[2]).toBe(group.moveUpButton);
+            expect(group.header.children[3]).toBe(group.moveDownButton);
+            expect(group.header.children[4]).toBe(group.visibleIcon);
         });
 
         test("should render items container with indentation classes", () => {

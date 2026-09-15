@@ -1,6 +1,8 @@
 // Part of the Chili3d Project, under the AGPL-3.0 License.
 // See LICENSE file in the project root for full license information.
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import type { I18nKeys } from "@chili3d/core";
 import { describe, expect, test } from "@rstest/core";
 
@@ -219,6 +221,147 @@ describe("FloatPanel", () => {
 
             expect(stopped).toBe(true);
         });
+    });
+});
+
+// Палец вместо мыши (B-276). Браузера в тестах нет, но захват указателя happy-dom
+// поддерживает по-настоящему (`setPointerCapture`/`hasPointerCapture`), поэтому
+// проверяем не текст исходника, а поведение: кто держит указатель и куда уезжает окно.
+describe("FloatPanel: окно тянется пальцем", () => {
+    const окно = () => new FloatPanel({ title: "Test" as I18nKeys, content: document.createElement("div") });
+
+    const шапка = (панель: FloatPanel) => панель.querySelector('[class*="header"]') as HTMLElement;
+    const уголок = (панель: FloatPanel) => панель.querySelector('[class*="resize"]') as HTMLElement;
+    const жест = (тип: string, init: PointerEventInit) =>
+        new PointerEvent(тип, { bubbles: true, pointerId: 7, pointerType: "touch", ...init });
+
+    test("палец забирает указатель себе и ведёт окно", () => {
+        const панель = окно();
+        const начало = панель.getBoundingClientRect();
+        const заголовок = шапка(панель);
+
+        заголовок.dispatchEvent(жест("pointerdown", { clientX: 100, clientY: 100 }));
+        // Без захвата палец, сойдя с заголовка, уводит события сцене под ним.
+        expect(заголовок.hasPointerCapture(7)).toBe(true);
+
+        заголовок.dispatchEvent(жест("pointermove", { clientX: 160, clientY: 140 }));
+        expect(панель.style.left).toBe(`${начало.left + 60}px`);
+        expect(панель.style.top).toBe(`${начало.top + 40}px`);
+    });
+
+    test("палец отпущен — захват снят, окно больше не едет", () => {
+        const панель = окно();
+        const заголовок = шапка(панель);
+
+        заголовок.dispatchEvent(жест("pointerdown", { clientX: 100, clientY: 100 }));
+        заголовок.dispatchEvent(жест("pointermove", { clientX: 160, clientY: 140 }));
+        const где = панель.style.left;
+        заголовок.dispatchEvent(жест("pointerup", { clientX: 160, clientY: 140 }));
+
+        expect(заголовок.hasPointerCapture(7)).toBe(false);
+        заголовок.dispatchEvent(жест("pointermove", { clientX: 400, clientY: 400 }));
+        expect(панель.style.left).toBe(где);
+    });
+
+    test("системный жест оборвал указатель — окно не липнет к пальцу", () => {
+        const панель = окно();
+        const заголовок = шапка(панель);
+
+        заголовок.dispatchEvent(жест("pointerdown", { clientX: 100, clientY: 100 }));
+        // `pointerup` после `pointercancel` не приходит: убирать за собой должен он сам.
+        заголовок.dispatchEvent(жест("pointercancel", { clientX: 100, clientY: 100 }));
+        const где = панель.style.left;
+
+        заголовок.dispatchEvent(жест("pointermove", { clientX: 400, clientY: 400 }));
+        expect(панель.style.left).toBe(где);
+    });
+
+    test("второй палец не перехватывает окно у первого", () => {
+        const панель = окно();
+        const начало = панель.getBoundingClientRect();
+        const заголовок = шапка(панель);
+
+        заголовок.dispatchEvent(жест("pointerdown", { clientX: 100, clientY: 100 }));
+        заголовок.dispatchEvent(жест("pointerdown", { pointerId: 8, clientX: 300, clientY: 300 }));
+        заголовок.dispatchEvent(жест("pointermove", { pointerId: 8, clientX: 340, clientY: 300 }));
+        // Второй палец окно не двигает: поля отсчёта заняты первым.
+        expect(панель.style.left).toBe("20px");
+
+        заголовок.dispatchEvent(жест("pointermove", { clientX: 150, clientY: 100 }));
+        expect(панель.style.left).toBe(`${начало.left + 50}px`);
+    });
+
+    test("мышь работает ровно как раньше", () => {
+        const панель = окно();
+        const начало = панель.getBoundingClientRect();
+        const заголовок = шапка(панель);
+        const мышь = (тип: string, init: PointerEventInit) =>
+            жест(тип, { pointerId: 1, pointerType: "mouse", ...init });
+
+        заголовок.dispatchEvent(мышь("pointerdown", { clientX: 100, clientY: 100 }));
+        заголовок.dispatchEvent(мышь("pointermove", { clientX: 130, clientY: 120 }));
+        expect(панель.style.left).toBe(`${начало.left + 30}px`);
+        expect(панель.style.top).toBe(`${начало.top + 20}px`);
+
+        заголовок.dispatchEvent(мышь("pointerup", { clientX: 130, clientY: 120 }));
+        заголовок.dispatchEvent(мышь("pointermove", { clientX: 200, clientY: 200 }));
+        expect(панель.style.left).toBe(`${начало.left + 30}px`);
+    });
+
+    test("нажатие на значок крестика не начинает перетаскивание", () => {
+        const панель = окно();
+        const заголовок = шапка(панель);
+        const значок = заголовок.querySelector("svg") as Element;
+
+        // Пальцем попадают по значку внутри кнопки, а не по самой кнопке. Захвати мы
+        // тут указатель — клик уехал бы на заголовок и окно перестало бы закрываться.
+        значок.dispatchEvent(жест("pointerdown", { clientX: 100, clientY: 100 }));
+        expect(заголовок.hasPointerCapture(7)).toBe(false);
+
+        заголовок.dispatchEvent(жест("pointermove", { clientX: 200, clientY: 200 }));
+        expect(панель.style.left).toBe("20px");
+    });
+
+    test("уголок тянется пальцем и держит указатель", () => {
+        // Пределы занижены нарочно: getBoundingClientRect в happy-dom нулевой, и при
+        // обычных 150×100 итог упёрся бы в минимум и ничего не проверил.
+        const панель = new FloatPanel({
+            title: "Test" as I18nKeys,
+            content: document.createElement("div"),
+            minWidth: 10,
+            minHeight: 10,
+        });
+        const начало = панель.getBoundingClientRect();
+        const ручка = уголок(панель);
+
+        ручка.dispatchEvent(жест("pointerdown", { clientX: 0, clientY: 0 }));
+        expect(ручка.hasPointerCapture(7)).toBe(true);
+
+        ручка.dispatchEvent(жест("pointermove", { clientX: 60, clientY: 40 }));
+        expect(панель.style.width).toBe(`${Math.max(10, начало.width + 60)}px`);
+        expect(панель.style.height).toBe(`${Math.max(10, начало.height + 40)}px`);
+
+        ручка.dispatchEvent(жест("pointerup", { clientX: 60, clientY: 40 }));
+        expect(ручка.hasPointerCapture(7)).toBe(false);
+    });
+
+    test("жесты по заголовку и уголку браузер не забирает себе", () => {
+        // Стили в тестах подменены моком, проверить их поведением нечем — читаем файл.
+        // Без `touch-action: none` браузер на планшете разберёт ведение пальца как
+        // прокрутку страницы и события до окна не дойдут.
+        const css = readFileSync(path.resolve(__dirname, "../src/floatPanel.module.css"), "utf8");
+        expect(css.split(".header {")[1]?.split("}")[0]).toContain("touch-action: none");
+        expect(css.split(".resizeHandle {")[1]?.split("}")[0]).toContain("touch-action: none");
+    });
+
+    test("dispose снимает и слушатели указателя", () => {
+        const панель = окно();
+        const заголовок = шапка(панель);
+        панель.dispose();
+
+        заголовок.dispatchEvent(жест("pointerdown", { clientX: 100, clientY: 100 }));
+        expect(заголовок.hasPointerCapture(7)).toBe(false);
+        expect(панель.style.left).toBe("20px");
     });
 });
 

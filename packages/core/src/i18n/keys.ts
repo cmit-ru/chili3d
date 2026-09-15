@@ -201,6 +201,8 @@ export const I18N_KEYS = [
     "home.welcome",
     "home.welcome.subtitle",
     "items.header",
+    "items.move.down",
+    "items.move.up",
     "items.tool.delete",
     "items.tool.expandAll",
     "items.tool.newFolder",

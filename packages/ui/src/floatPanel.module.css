@@ -20,6 +20,10 @@
     cursor: move;
     user-select: none;
     flex-shrink: 0;
+    /* Палец вместо мыши (B-276): иначе жест по заголовку браузер разбирает как свою
+       прокрутку и `pointermove` до окна не доходит. У `html, body` в `public/index.css`
+       правило такое же, но держаться перетаскивание должно на своём. */
+    touch-action: none;
 }
 
 .title {
@@ -65,4 +69,6 @@
     width: 16px;
     height: 16px;
     cursor: se-resize;
+    /* То же, что у заголовка (B-276): жест уголка остаётся у окна. */
+    touch-action: none;
 }

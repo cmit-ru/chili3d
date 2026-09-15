@@ -8,7 +8,9 @@ import style from "./treeModel.module.css";
 export class TreeModel extends TreeItem {
     constructor(document: IDocument, node: INode) {
         super(document, node);
-        this.append(this.name, this.visibleIcon);
+        // «Выше» и «Ниже» — между именем и глазком (B-276): глазок остаётся
+        // крайним справа, как ребёнок к нему и привык.
+        this.append(this.name, this.moveUpButton, this.moveDownButton, this.visibleIcon);
         this.classList.add(style.panel);
     }
 

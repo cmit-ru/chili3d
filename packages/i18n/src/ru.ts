@@ -206,6 +206,8 @@ export default {
         "home.welcome": "Добро пожаловать в chili3d",
         "home.welcome.subtitle": "Проектируйте и моделируйте в 3D прямо в браузере.",
         "items.header": "Компоненты",
+        "items.move.down": "Ниже",
+        "items.move.up": "Выше",
         "items.tool.delete": "Удалить",
         "items.tool.expandAll": "Раскрыть все",
         "items.tool.newFolder": "Новая папка",

@@ -12,6 +12,8 @@ rs.mock("../src/project/tree/treeItem.module.css", () => ({
     name: "ti-name",
     icon: "ti-icon",
     "parent-hidden": "ti-parent-hidden",
+    moveButton: "ti-move",
+    moveHidden: "ti-move-hidden",
 }));
 
 rs.mock("../src/project/tree/treeModel.module.css", () => ({
@@ -81,11 +83,15 @@ describe("TreeModel (TreeItem)", () => {
             expect(item.visibleIcon.classList.contains("ti-icon")).toBe(true);
         });
 
-        test("should append name and visible icon to itself with panel class", () => {
+        test("should append name, move buttons and visible icon with panel class", () => {
             const item = createItem();
             expect(item.classList.contains("tm-panel")).toBe(true);
             expect(item.children[0]).toBe(item.name);
-            expect(item.children[1]).toBe(item.visibleIcon);
+            // «Выше» и «Ниже» встают между именем и глазком (B-276): глазок
+            // остаётся крайним справа.
+            expect(item.children[1]).toBe(item.moveUpButton);
+            expect(item.children[2]).toBe(item.moveDownButton);
+            expect(item.children[3]).toBe(item.visibleIcon);
         });
 
         test("should be draggable", () => {
