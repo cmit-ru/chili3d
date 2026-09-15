@@ -53,6 +53,11 @@ export class RibbonGroupElement extends HTMLElement {
     constructor(readonly group: RibbonGroup) {
         super();
         this.className = style.ribbonGroup;
+        // Стабильная зацепка для форка «Макетки»: тур первого входа (B-278) наводит
+        // первый пузырь на группу «Фигуры». Искать её по порядку в ленте нельзя —
+        // порядок групп задаёт профиль ленты (`builder/src/ribbon.ts`) и он меняется,
+        // а подпись группы переводится. Ключ группы переживает и то, и другое.
+        this.dataset["ribbonGroup"] = group.groupName;
         this.initHTML();
     }
 

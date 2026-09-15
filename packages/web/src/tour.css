@@ -1,0 +1,39 @@
+/* Part of the Chili3d Project, under the AGPL-3.0 License.
+   See LICENSE file in the project root for full license information. */
+
+/* Пузыри тура (B-278) поверх готовых стилей driver.js. Правим ровно то, что мешает
+   ребёнку: кнопки у библиотеки 12 px и ростом около 24 px — мелко для восьмилетки,
+   а пальцем в них не попасть вовсе. Мишень 44×44 при грубом указателе — общее
+   правило каркаса (`frame-contract.md`), тем же порогом живут лента и дерево.
+
+   `body` в селекторе — не украшение: чей лист стилей окажется в бандле позже,
+   решает сборщик, а при равном весе побеждает поздний. Лишний уровень снимает
+   вопрос. Шрифт так поднимать не нужно — его библиотека берёт из переменной,
+   которую сама не задаёт (`tour.ts` пишет туда шрифт каркаса).
+
+   Одного `min-height` мало: кнопка нарисована `display: inline-block` и стоит
+   в флекс-строке с `align-items: stretch`, поэтому подпись осталась бы прижатой
+   к верхнему краю высокой коробки. Отсюда флекс с выравниванием по центру. */
+body .driver-popover-footer-btn {
+    font-size: 14px;
+    padding: 6px 12px;
+}
+
+@media (pointer: coarse) {
+    body .driver-popover-footer-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+    }
+
+    /* Крестик у библиотеки 32×28. На первых трёх пузырях он единственный выход,
+       и промах по нему ребёнок читает как «мастерская перестала слушаться». */
+    body .driver-popover-close-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+    }
+}

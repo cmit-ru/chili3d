@@ -35,7 +35,6 @@ import { enableEconomyIfNeeded } from "./economy";
 import { EditLockHolder, EditLockShield, EditLockWatch, СЛОВА as ЗАМОК } from "./editLock";
 import { showNotice, subscribeCoreErrors } from "./errorBanner";
 import { Feedback, можноПрикладывать } from "./feedback";
-import { FirstHint } from "./firstHint";
 import { type CopyAnswer, FrameBar } from "./frameBar";
 import { GuestSave } from "./guestSave";
 import { type LessonCard, LessonPanel } from "./lessonPanel";
@@ -46,6 +45,7 @@ import { PreviewShots } from "./preview";
 import { returnWorkFromFiles } from "./returnWork";
 import { SandboxNotice } from "./sandboxNotice";
 import { ScreenLock } from "./screenLock";
+import { гостьВиделТур, завестиТур, запомнитьТурГостя } from "./tour";
 import { sendEvent } from "./track";
 import { отметитьКоманду } from "./trail";
 import { ViewBanner } from "./viewBanner";
@@ -77,7 +77,8 @@ interface ProjectMeta {
     hasPreview?: boolean;
     /** Ракурс последнего закрытия: с ним работа и откроется. Разбирает `viewMemory`. */
     camera?: unknown;
-    showHint?: boolean;
+    /** Показывать ли тур первого входа: решает сервер — ученику и только один раз (B-278). */
+    showTour?: boolean;
     sharedPc?: boolean;
     economyMode?: boolean;
     viewingOthers?: boolean;
@@ -565,15 +566,8 @@ async function openProject(
         // ребёнок не должен видеть чужие галочки.
         new LessonPanel(meta.card, id, String(meta.user?.id ?? "гость"));
     }
-    // Первый вход: три шага «куда нажимать». Отметку ставим сразу по закрытию —
-    // если запрос не дошёл, подсказка повторится, и это лучше, чем потерять её.
-    if (meta?.showHint) {
-        new FirstHint(() => {
-            void fetch("/api/hint-seen", { method: "POST", credentials: "same-origin" }).catch(
-                () => undefined,
-            );
-        });
-    }
+    // Тур первого входа отсюда ушёл: он начинается не при открытии работы, а когда
+    // мастерская целиком готова, — см. `показатьТур` в конце `handleApplicaionBuilt`.
     // Объём модели уезжает с каждым сохранением (B-045): нужен разбору
     // помощника, проверкам карточек и 3D-печати.
     const storage = app.storage as unknown as CloudStorage;
@@ -685,6 +679,45 @@ async function openProject(
     return { наводка: Promise.race([наводка, пауза(4_000)]) };
 }
 
+/**
+ * Тур первого входа (B-278): четыре пузыря по мастерской, каждый подсвечивает то
+ * место, про которое говорит.
+ *
+ * Две ветки, и это не прихоть, а разное устройство входа:
+ *   • у вошедшего признак живёт у учётной записи — иначе первый ребёнок за общим
+ *     компьютером класса съел бы тур у всех остальных (инвариант И-7). Показывать
+ *     ли, решает сервер (`showTour`: ученику и только пока не показывали), а отметку
+ *     ставит узкая ручка `POST /api/tour-seen` — общая ручка настроек пишет весь
+ *     `ui_prefs` целиком и затёрла бы соседние ключи;
+ *   • у гостя в пробе учётной записи нет вовсе, и мета сюда не приезжает: ветка
+ *     песочницы в `openProject` выходит раньше, чем спрашивают сервер. Признак
+ *     ему хранить негде, кроме браузера, — это единственное место в продукте,
+ *     где делить компьютер не с кем.
+ *
+ * Отметку ставим и по «Понятно», и по закрытию на любом шаге: закрыл — значит
+ * ответил. Если запрос не дошёл, тур придёт ещё раз — это лучше, чем ребёнок,
+ * которому его больше не покажут из-за моргнувшей сети.
+ */
+function показатьТур(meta: ProjectMeta | null) {
+    if (!projectId() && sandboxFromLocation()) {
+        if (гостьВиделТур()) return;
+        завестиТур({ гость: true, пройден: запомнитьТурГостя });
+        return;
+    }
+    if (!meta?.showTour) return;
+    завестиТур({
+        гость: false,
+        пройден: () => {
+            void fetch("/api/tour-seen", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ kind: "3d" }),
+            }).catch(() => undefined);
+        },
+    });
+}
+
 async function handleApplicaionBuilt(app: IApplication, earlyMeta: ProjectMeta | null) {
     // Системное окно браузера «Изменения могут не сохраниться» ставит апстримный
     // `app/src/application.ts:85` — и показывает его всегда, даже когда всё
@@ -745,6 +778,13 @@ async function handleApplicaionBuilt(app: IApplication, earlyMeta: ProjectMeta |
     // (замечание владельца 06.09.2026 по работе 65).
     await наводка;
     spinner.remove();
+
+    // Тур первого входа (B-278) — последним делом, и именно здесь. «Мастерская
+    // готова» для тура — это не событие `editor_ready` выше, а снятая накладка:
+    // `ModelSpinner` лежит поверх всего окна (`inset: 0`), а пузырь рисуется ещё
+    // выше него, — запусти тур парой строк раньше, и ребёнок читал бы «Фигуры
+    // берут здесь» поверх надписи «Собираем модель…», подсвечивающей мутное пятно.
+    показатьТур(earlyMeta);
 }
 
 // Мета грузится ДО сборки приложения: флаг «общие компьютеры класса» должен

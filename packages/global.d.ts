@@ -33,6 +33,13 @@ declare module "*.ttf" {
 
 declare module "*.sass";
 
+// Обычный лист стилей, подключаемый ради самого подключения (`import "…/driver.css"`):
+// имён из него никто не читает, правила уезжают в бандл целиком. Свои стили редактор
+// держит в `*.module.css` выше — объявление нужно чужим пакетам, которые кладут готовый
+// css рядом с кодом (driver.js, B-278). Экспортов у такого модуля нет: `import style from`
+// на нём не соберётся, и это правильно.
+declare module "*.css";
+
 // @rstest/core's JestAssertion interface extends jest.Matchers (normally provided
 // by @types/jest); shim the namespace so tsc --noEmit stays clean without the extra dep
 declare namespace jest {

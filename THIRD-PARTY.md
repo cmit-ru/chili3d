@@ -27,7 +27,7 @@
 
 <!-- ПЕРЕЧЕНЬ-НАЧАЛО: раздел считается скриптом scripts/third-party.mjs, руками не править -->
 
-Всего компонентов: 30. Пересчитывается командой `npm run third-party`.
+Всего компонентов: 31. Пересчитывается командой `npm run third-party`.
 
 ### Компоненты вне npm
 
@@ -50,6 +50,7 @@
 | Компонент | Версия | Правообладатель | Лицензия | Где используется | Источник |
 |---|---|---|---|---|---|
 | @types/jszip | 3.4.0 | Microsoft Corporation | MIT | В браузере (бандл редактора) | https://github.com/Stuk/jszip |
+| driver.js | 1.8.0 | Kamran Ahmed | MIT | В браузере (бандл редактора) | https://github.com/nilbuild/driver.js |
 | jszip | 3.10.1 | Stuart Knightley | (MIT OR GPL-3.0-or-later) | В браузере (бандл редактора) | https://github.com/Stuk/jszip |
 | opentype.js | 2.0.0 | Frederik De Bleser | MIT | В браузере (бандл редактора) | https://github.com/opentypejs/opentype.js |
 | @biomejs/biome | 2.4.15 | Emanuele Stoppa | MIT OR Apache-2.0 | Инструмент сборки (в поставку не входит) | https://github.com/biomejs/biome |
