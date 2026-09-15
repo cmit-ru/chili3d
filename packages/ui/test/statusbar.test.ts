@@ -1,6 +1,8 @@
 // Part of the Chili3d Project, under the AGPL-3.0 License.
 // See LICENSE file in the project root for full license information.
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { beforeEach, describe, expect, test } from "@rstest/core";
 
 // Mock CSS module under test
@@ -147,5 +149,39 @@ describe("Statusbar", () => {
 
             expect(i18nSetMock).not.toHaveBeenCalled();
         });
+    });
+});
+
+/**
+ * Подсказка обязана обрезаться многоточием внутри своей половины полосы.
+ *
+ * Она сделана элементом `<label>`, а у строчного бокса `overflow` и `text-overflow`
+ * не действуют: без `display: block` длинная русская подсказка печаталась поверх
+ * привязок — две надписи в одних и тех же пикселях (реестровый снимок 3.7, 15.09.2026).
+ * Правило живёт в CSS, браузера в наборе нет — читаем файл текстом, как в
+ * `treeMoveButtons.test.ts`. Комментарии срезаем: в них те же слова, что в правилах.
+ */
+describe("подсказка в строке состояния обрезается, а не налезает", () => {
+    const CSS = readFileSync(
+        path.resolve(__dirname, "../src/statusbar/statusbar.module.css"),
+        "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "");
+    const блокTip = /\.tip \{([^}]*)\}/.exec(CSS)?.[1];
+
+    test("подсказка — блочный бокс, иначе обрезка не работает", () => {
+        expect(блокTip).toBeTruthy();
+        expect(блокTip).toMatch(/display:\s*(block|inline-block|flex)/);
+    });
+
+    test("длинная подсказка уходит в многоточие, а не переносится и не вылезает", () => {
+        expect(блокTip).toMatch(/white-space:\s*nowrap/);
+        expect(блокTip).toMatch(/overflow:\s*hidden/);
+        expect(блокTip).toMatch(/text-overflow:\s*ellipsis/);
+    });
+
+    test("левая половина полосы даёт себя сжать", () => {
+        // Без `min-width: 0` флекс-элемент не сжимается ниже своего содержимого,
+        // и подсказка выдавила бы привязки за правый край (B-276).
+        expect(/\.left \{([^{]*)\{/.exec(CSS)?.[1]).toMatch(/min-width:\s*0/);
     });
 });

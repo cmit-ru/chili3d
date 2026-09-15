@@ -17,6 +17,11 @@
         font-size: 12px;
         margin: 4px 8px;
         color: var(--statusbar-foreground-color);
+        /* Подсказка — это `<label>`, то есть строчный бокс, а у строчного ни
+           `overflow`, ни `text-overflow` не работают: вместо многоточия она
+           печаталась прямо поверх привязок. Поймано на реестровом снимке 3.7
+           (1366 px — школьный ноутбук), 15.09.2026. */
+        display: block;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
