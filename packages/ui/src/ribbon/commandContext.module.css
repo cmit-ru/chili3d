@@ -204,3 +204,33 @@
         height: 20px;
     }
 }
+
+/* Кнопка «Ввести число» (B-317). Показывается только там, где есть касание: мышью
+   число набирают прямо в сцене, не целясь в кнопку, и полоса команды остаётся
+   прежней ширины. Гейт `any-pointer`, а не `pointer`: у ноутбука с сенсорным
+   экраном основной указатель точный, но пальцем ребёнок попробует (ADR
+   2026-09-14-1530). Сам размер мишени идёт за основным указателем — там же, ниже. */
+.numberButton {
+    display: none;
+    align-items: center;
+    padding: 2px 12px;
+    font: inherit;
+    border-radius: 6px;
+    color: var(--foreground-color);
+    border: 1px solid var(--border-color);
+    background-color: var(--control-background-color);
+    cursor: pointer;
+}
+
+@media (any-pointer: coarse) {
+    .numberButton {
+        display: inline-flex;
+    }
+}
+
+@media (pointer: coarse) {
+    .numberButton {
+        min-height: 44px;
+        padding: 2px 16px;
+    }
+}

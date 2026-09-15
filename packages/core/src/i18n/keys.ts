@@ -134,6 +134,7 @@ export const I18N_KEYS = [
     "common.confirm",
     "common.count",
     "common.dir",
+    "common.enterNumber",
     "common.general",
     "common.height",
     "common.isGroup",

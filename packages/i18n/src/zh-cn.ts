@@ -139,6 +139,7 @@ export default {
         "common.confirm": "确定",
         "common.count": "数量",
         "common.dir": "方向",
+        "common.enterNumber": "输入数值",
         "common.general": "常规",
         "common.height": "高度",
         "common.isGroup": "组",

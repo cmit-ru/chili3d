@@ -139,6 +139,7 @@ export default {
         "common.confirm": "Confirm",
         "common.count": "Count",
         "common.dir": "Direction",
+        "common.enterNumber": "Enter number",
         "common.general": "General",
         "common.height": "Height",
         "common.isGroup": "Group",

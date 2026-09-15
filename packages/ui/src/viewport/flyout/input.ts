@@ -17,6 +17,15 @@ export class Input extends HTMLElement implements IDisposable {
     ) {
         super();
         this.className = style.panel;
+        // Указатель, попавший в поле, дальше сцены не идёт (B-317). Записка лежит внутри
+        // вида, а вид гасит `pointerdown` по умолчанию и снимает фокус с активного
+        // элемента — пальцем в поле было не попасть, клавиатура не выезжала. По
+        // `pointerup` вид к тому же завершает шаг: набранное исчезло бы вместе с полем,
+        // едва ребёнок поставит в нём курсор, а по `pointermove` записка переехала бы
+        // из-под пальца.
+        for (const type of ["pointerdown", "pointermove", "pointerup"]) {
+            this.addEventListener(type, (e) => e.stopPropagation());
+        }
         this.textbox = input({
             value: text,
             onkeydown: this.handleKeyDown,

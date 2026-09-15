@@ -7,7 +7,15 @@ body {
     height: 100%;
     font-size: 14px;
     font-family: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
-    touch-action: none;
+    /* Панорамирование пальцем отдано браузеру (B-316). Прежнее `touch-action: none`
+       писалось про страницу — она и правда не прокручивается (`overflow: hidden`
+       выше), — но гасило прокрутку и во вложенных блоках: наследования у свойства
+       нет, зато жест сверяется со всей цепочкой предков. Прокручиваемого в редакторе
+       хватает: дерево модели, свойства, лента инструментов, содержимое плавающего
+       окна, панель урока. Масштаб страницы по-прежнему не трогается — в списке
+       только `pan-*`, без `pinch-zoom`. Запрет жеста остался там, где он и нужен, —
+       у сцены (`.root` в `packages/ui/src/viewport/viewport.module.css`). */
+    touch-action: pan-x pan-y;
     color: var(--foreground-color);
     background-color: var(--background-color);
 }

@@ -31,6 +31,10 @@ export abstract class SnapEventHandler<D extends SnapData = SnapData> implements
         this.showTempShape(undefined);
         controller.onCancelled(() => this.handleCancel());
         controller.onCompleted(() => this.handleSuccess());
+        // Пока обработчик жив, вместо точки в сцене можно набрать число. Единственным
+        // входом в это был `keydown`, то есть на планшете размер числом не задавался
+        // вовсе — сообщаем оболочке, что кнопке ввода сейчас есть что открывать. (B-317)
+        PubSub.default.pub("showNumberControl", this.openNumberInput);
     }
 
     get snaped() {
@@ -64,6 +68,7 @@ export abstract class SnapEventHandler<D extends SnapData = SnapData> implements
     private cleanupResources() {
         this.clearSnapPrompt();
         this.clearInput();
+        PubSub.default.pub("clearNumberControl");
         this.removeTempVisuals();
         this.snaps.forEach((snap) => snap.clear());
     }
@@ -265,8 +270,18 @@ export abstract class SnapEventHandler<D extends SnapData = SnapData> implements
     private handleNumericInput(view: IView, event: KeyboardEvent) {
         if (!["#", "-", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"].includes(event.key)) return;
 
+        this.showNumberInput(view, event.key);
+    }
+
+    /** Кнопка ввода числа: то же поле, что и от цифры, но с пустым началом. (B-317) */
+    private readonly openNumberInput = () => {
+        const view = this.document.application.activeView;
+        if (view) this.showNumberInput(view, "");
+    };
+
+    private showNumberInput(view: IView, initial: string) {
         this._state = "inputing";
-        PubSub.default.pub("showInput", event.key, (text: string) => {
+        PubSub.default.pub("showInput", initial, (text: string) => {
             const error = this.inputError(text);
             if (error) return Result.err(error);
 

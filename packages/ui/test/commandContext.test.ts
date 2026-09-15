@@ -18,6 +18,7 @@ rs.mock("../src/ribbon/commandContext.module.css", () => ({
     selectionInfo: "cc-selection-info",
     selectionCount: "cc-selection-count",
     selectionCountLabel: "cc-selection-count-label",
+    numberButton: "cc-number-button",
     group: "cc-group",
     select: "cc-select",
     input: "cc-input",
@@ -329,6 +330,67 @@ describe("CommandContext", () => {
             expect(controller.cancel).toHaveBeenCalledTimes(1);
 
             PubSub.default.pub("clearSelectionControl");
+        });
+    });
+
+    /**
+     * Кнопка «Ввести число» (B-317). До неё поле размера открывалось только цифрой с
+     * клавиатуры — на планшете, где клавиатуры нет, размер числом не задавался вовсе.
+     * Кнопка живёт ровно столько, сколько шаг умеет принимать число: показывать её
+     * впустую нельзя, нажатие без ответа ребёнок читает как поломку.
+     */
+    describe("кнопка ввода числа", () => {
+        const кнопка = (ctx: CommandContext) =>
+            ctx.querySelector(".cc-number-button") as unknown as { _onclick: () => void } | null;
+
+        test("шаг принимает число — кнопка открывает то самое поле", () => {
+            const ctx = track(new CommandContext(new CancelableTestCommand()));
+            document.body.appendChild(ctx);
+            const открыть = rs.fn(() => {});
+
+            PubSub.default.pub("showNumberControl", открыть);
+
+            кнопка(ctx)?._onclick();
+            expect(открыть).toHaveBeenCalledTimes(1);
+
+            PubSub.default.pub("clearNumberControl");
+        });
+
+        test("шаг закончился — кнопки нет", () => {
+            const ctx = track(new CommandContext(new CancelableTestCommand()));
+            document.body.appendChild(ctx);
+            PubSub.default.pub("showNumberControl", () => {});
+
+            PubSub.default.pub("clearNumberControl");
+
+            expect(кнопка(ctx)).toBeNull();
+        });
+
+        test("кнопка стоит перед крестиком, а не за краем полосы", () => {
+            // Крестик прижат вправо `margin-left: auto`: приписанная после него кнопка
+            // уехала бы за край.
+            const ctx = track(new CommandContext(new CancelableTestCommand()));
+            document.body.appendChild(ctx);
+
+            PubSub.default.pub("showNumberControl", () => {});
+
+            const полоса = mustQuery(ctx, ".cc-container");
+            const дети = Array.from(полоса.children);
+            expect(дети.findIndex((э) => э.className === "cc-number-button")).toBeLessThan(
+                дети.findIndex((э) => э.className === "cc-cancel"),
+            );
+
+            PubSub.default.pub("clearNumberControl");
+        });
+
+        test("полосу убрали — кнопке больше негде появиться", () => {
+            const ctx = track(new CommandContext(new CancelableTestCommand()));
+            document.body.appendChild(ctx);
+
+            ctx.remove();
+            PubSub.default.pub("showNumberControl", () => {});
+
+            expect(кнопка(ctx)).toBeNull();
         });
     });
 

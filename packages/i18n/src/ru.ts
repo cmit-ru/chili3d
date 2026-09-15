@@ -139,6 +139,7 @@ export default {
         "common.confirm": "Подтвердить",
         "common.count": "Количество",
         "common.dir": "Направление",
+        "common.enterNumber": "Ввести число",
         "common.general": "Основное",
         "common.height": "Высота",
         "common.isGroup": "Группа",

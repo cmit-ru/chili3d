@@ -17,6 +17,8 @@ export interface PubSubEventMap {
     activeViewChanged: (view: IView | undefined) => void;
     clearFloatTip: () => void;
     clearInput: () => void;
+    /** Форк «Макетки»: вводить число больше некуда — шаг закончился. */
+    clearNumberControl: () => void;
     clearSelectionControl: () => void;
     clearStatusBarTip: () => void;
     closeCommandContext: () => void;
@@ -33,6 +35,12 @@ export interface PubSubEventMap {
     showFloatPanel: (options: FloatPanelOptions) => void;
     showFloatTip: (dom: HTMLElement | { level: MessageType; msg: string }) => void;
     showInput: (text: string, handler: (text: string) => Result<string, I18nKeys>) => void;
+    /**
+     * Форк «Макетки»: на этом шаге размер можно задать числом, а не точкой в сцене.
+     * `open` открывает то же поле, что и цифра с клавиатуры: на планшете клавиатуры
+     * нет, и без кнопки поле не открыть ничем. (B-317)
+     */
+    showNumberControl: (open: () => void) => void;
     showPermanent: (action: () => Promise<void>, message: I18nKeys, ...args: any[]) => void;
     showProperties(document: IDocument, nodes: INode[]): void;
     showSelectionControl: (controller: AsyncController) => void;

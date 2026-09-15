@@ -41,6 +41,7 @@ export class CommandContext extends HTMLElement implements IDisposable {
     private readonly container = div({ className: style.container });
     private selectionControlContainer?: HTMLDivElement;
     private closeIcon?: HTMLElement;
+    private numberButton?: HTMLElement;
     private selectionCountCleanups: Array<() => void> = [];
 
     constructor(readonly command: ICommand) {
@@ -122,6 +123,31 @@ export class CommandContext extends HTMLElement implements IDisposable {
         return countSpan;
     }
 
+    /**
+     * Кнопка «Ввести число» — вход в поле размера для пальца (B-317). Поле открывалось
+     * только цифрой с клавиатуры, а на планшете её нет: без кнопки размер числом не
+     * задать ничем. Кнопка стоит в полосе выполняемой команды, а не в самой сцене, —
+     * там она не перехватывает касания, которыми указывают точки, и не ездит за пальцем.
+     * Живёт ровно столько, сколько шаг умеет принимать число: показывать её впустую
+     * нельзя, нажатие без ответа ребёнок читает как поломку.
+     */
+    private readonly showNumberControl = (open: () => void) => {
+        if (this.numberButton) return;
+        this.numberButton = button({
+            className: style.numberButton,
+            textContent: new Localize("common.enterNumber"),
+            onclick: () => open(),
+        });
+        // Перед крестиком: тот прижат вправо, и приписанная после него кнопка встала бы
+        // за край полосы.
+        this.container.insertBefore(this.numberButton, this.closeIcon ?? null);
+    };
+
+    private readonly clearNumberControl = () => {
+        this.numberButton?.remove();
+        this.numberButton = undefined;
+    };
+
     private readonly clearSelectionControl = () => {
         this.selectionControlContainer?.remove();
         this.selectionControlContainer = undefined;
@@ -133,6 +159,8 @@ export class CommandContext extends HTMLElement implements IDisposable {
     connectedCallback(): void {
         PubSub.default.sub("showSelectionControl", this.showSelectionControl);
         PubSub.default.sub("clearSelectionControl", this.clearSelectionControl);
+        PubSub.default.sub("showNumberControl", this.showNumberControl);
+        PubSub.default.sub("clearNumberControl", this.clearNumberControl);
         if (this.command instanceof Observable) {
             this.command.onPropertyChanged(this.onPropertyChanged);
         }
@@ -140,8 +168,11 @@ export class CommandContext extends HTMLElement implements IDisposable {
 
     disconnectedCallback(): void {
         this.clearSelectionControl();
+        this.clearNumberControl();
         PubSub.default.remove("showSelectionControl", this.showSelectionControl);
         PubSub.default.remove("clearSelectionControl", this.clearSelectionControl);
+        PubSub.default.remove("showNumberControl", this.showNumberControl);
+        PubSub.default.remove("clearNumberControl", this.clearNumberControl);
         if (this.command instanceof Observable) {
             this.command.removePropertyChanged(this.onPropertyChanged);
         }

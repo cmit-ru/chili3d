@@ -380,3 +380,80 @@ describe("SnapEventHandler — base class behaviour", () => {
         });
     });
 });
+
+/**
+ * Ввод числа вместо точки открывался одним только `keydown` (B-317). На планшете
+ * клавиатуры нет, и размер числом там не задавался вовсе — теперь обработчик, пока
+ * жив, отдаёт оболочке способ открыть то же поле. Сторожится не вид кнопки (он в
+ * `packages/ui/test/commandContext.test.ts`), а сам договор: способ появляется с
+ * шагом, открывает пустое поле и пропадает вместе с шагом.
+ */
+describe("ввод числа без клавиатуры", () => {
+    let document: TestDocument;
+    let controller: AsyncController;
+    let открыть: (() => void) | undefined;
+    let убрано: number;
+
+    const запомнить = (fn: () => void) => {
+        открыть = fn;
+    };
+    const посчитать = () => {
+        убрано += 1;
+    };
+
+    beforeEach(() => {
+        document = new TestDocument();
+        controller = new AsyncController();
+        открыть = undefined;
+        убрано = 0;
+        PubSub.default.sub("showNumberControl", запомнить);
+        PubSub.default.sub("clearNumberControl", посчитать);
+    });
+
+    afterEach(() => {
+        PubSub.default.remove("showNumberControl", запомнить);
+        PubSub.default.remove("clearNumberControl", посчитать);
+        controller.dispose();
+    });
+
+    test("шаг начался — способ открыть поле есть", () => {
+        new PointSnapEventHandler(document, controller, {});
+        expect(typeof открыть).toBe("function");
+    });
+
+    test("способ открывает то же поле, что и цифра, только пустое", () => {
+        const handler = new PointSnapEventHandler(document, controller, {
+            dimension: 0b111,
+            refPoint: () => XYZ.zero,
+        });
+        document.application.activeView = createHandlerMockView();
+        let начало: string | undefined;
+        const поймать = (text: string) => {
+            начало = text;
+        };
+        PubSub.default.sub("showInput", поймать);
+
+        открыть?.();
+        PubSub.default.remove("showInput", поймать);
+
+        expect(начало).toBe("");
+        expect(handler.state).toBe("inputing");
+    });
+
+    test("вида нет — открывать нечего, и никто не падает", () => {
+        const handler = new PointSnapEventHandler(document, controller, {});
+        document.application.activeView = undefined;
+
+        открыть?.();
+
+        expect(handler.state).toBe("idle");
+    });
+
+    test("шаг закончился — вводить число больше негде", () => {
+        const handler = new PointSnapEventHandler(document, controller, {});
+        const view = createHandlerMockView();
+        handler.keyDown(view, { key: "Escape" } as KeyboardEvent);
+
+        expect(убрано).toBe(1);
+    });
+});
